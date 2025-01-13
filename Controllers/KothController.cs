@@ -202,24 +202,19 @@ namespace KothBackend.Controllers
             }
         }
 
-        [HttpPost("admin/bonuscode")]
-        public async Task<IActionResult> CreateBonusCode([FromBody] Dictionary<string, string> data)
+        [HttpPost("admin/createbonus")]
+        public async Task<IActionResult> CreateBonusCode([FromBody] BonusCodeCreateRequest request)
         {
             ValidateApiKey();
-
-            if (!data.ContainsKey("code") || !data.ContainsKey("name") ||
-                !data.ContainsKey("multiplier") || !data.ContainsKey("validDays"))
-                return BadRequest("Missing required fields");
 
             try
             {
                 await _mongoService.CreateBonusCode(
-                    data["code"],
-                    data["name"],
-                    double.Parse(data["multiplier"]),
-                    int.Parse(data["validDays"])
+                    request.Code,
+                    request.Name,
+                    request.Multiplier,
+                    request.ValidDays
                 );
-
                 return Ok(new { status = "success", message = "Bonus code created" });
             }
             catch (Exception ex)
