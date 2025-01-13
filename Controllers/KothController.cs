@@ -212,7 +212,7 @@ namespace KothBackend.Controllers
                 await _mongoService.CreateBonusCode(
                     request.Code,
                     request.Name,
-                    request.Multiplier,
+                    request.Multiplier,  // Now matches the string type
                     request.ValidDays
                 );
                 return Ok(new { status = "success", message = "Bonus code created" });

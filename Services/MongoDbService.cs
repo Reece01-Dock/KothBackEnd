@@ -113,7 +113,7 @@ namespace KothBackend.Services
         public async Task<BonusCodeResponse> GetBonusCode(string playerUID)
         {
             var bonusCode = await _bonusCodes
-                .Find(b => b.PlayerUID == playerUID && !b.IsUsed && b.DateEnd > DateTime.UtcNow)
+                .Find(b => !b.UsedByPlayers.Contains(playerUID) && DateTime.Parse(b.DateEnd) > DateTime.UtcNow)
                 .FirstOrDefaultAsync();
 
             if (bonusCode == null)
@@ -129,9 +129,9 @@ namespace KothBackend.Services
             {
                 name = bonusCode.Name,
                 code = bonusCode.Code,
-                playerUID = bonusCode.PlayerUID,
-                multiplier = bonusCode.Multiplier.ToString(),
-                dateEnd = bonusCode.DateEnd.ToString("yyyy-MM-dd HH:mm:ss"),
+                playerUID = playerUID,
+                multiplier = bonusCode.Multiplier,
+                dateEnd = bonusCode.DateEnd,
                 error = false
             };
         }
@@ -139,7 +139,7 @@ namespace KothBackend.Services
         public async Task<BonusCodeResponse> UseBonusCode(string code, string playerUID)
         {
             var bonusCode = await _bonusCodes
-                .Find(b => b.Code == code && b.DateEnd > DateTime.UtcNow)
+                .Find(b => b.Code == code && DateTime.Parse(b.DateEnd) > DateTime.UtcNow)
                 .FirstOrDefaultAsync();
 
             if (bonusCode == null)
@@ -151,7 +151,6 @@ namespace KothBackend.Services
                 };
             }
 
-            // Check if player already used this code
             if (bonusCode.UsedByPlayers.Contains(playerUID))
             {
                 return new BonusCodeResponse
@@ -170,21 +169,22 @@ namespace KothBackend.Services
                 name = bonusCode.Name,
                 code = bonusCode.Code,
                 playerUID = playerUID,
-                multiplier = bonusCode.Multiplier.ToString(),
-                dateEnd = bonusCode.DateEnd.ToString("yyyy-MM-dd HH:mm:ss"),
+                multiplier = bonusCode.Multiplier,
+                dateEnd = bonusCode.DateEnd,
                 error = false
             };
         }
 
-        public async Task CreateBonusCode(string code, string name, double multiplier, int validDays)
+        public async Task CreateBonusCode(string code, string name, string multiplier, int validDays)
         {
             var bonusCode = new BonusCode
             {
                 Code = code,
                 Name = name,
                 Multiplier = multiplier,
-                DateEnd = DateTime.UtcNow.AddDays(validDays),
-                IsUsed = false
+                DateEnd = DateTime.UtcNow.AddDays(validDays).ToString("yyyy-MM-dd HH:mm:ss"),
+                IsUsed = false,
+                UsedByPlayers = new HashSet<string>()
             };
 
             await _bonusCodes.InsertOneAsync(bonusCode);
