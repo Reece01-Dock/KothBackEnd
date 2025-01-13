@@ -11,5 +11,7 @@ namespace KothBackend.Services
         Task UpdatePlayerStats(List<PlayerStats> stats);
         Task<List<string>> GetActiveBans();
         Task AddBan(string playerUID);
+        Task<BonusCodeResponse> GetBonusCode(string playerUID);
+        Task<BonusCodeResponse> UseBonusCode(string code, string playerUID);
     }
 }

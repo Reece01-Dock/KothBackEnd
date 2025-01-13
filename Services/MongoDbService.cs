@@ -11,6 +11,7 @@ namespace KothBackend.Services
         private readonly IMongoCollection<PlayerProfile> _profiles;
         private readonly IMongoCollection<PlayerStats> _stats;
         private readonly IMongoCollection<BsonDocument> _bans;
+        private readonly IMongoCollection<BonusCode> _bonusCodes;
 
         public MongoDbService(IOptions<MongoDbSettings> settings)
         {
@@ -20,6 +21,7 @@ namespace KothBackend.Services
             _profiles = database.GetCollection<PlayerProfile>("profiles");
             _stats = database.GetCollection<PlayerStats>("stats");
             _bans = database.GetCollection<BsonDocument>("bans");
+            _bonusCodes = database.GetCollection<BonusCode>("bonus_codes");
         }
 
         public async Task<PlayerProfile> GetProfile(string playerUID)
@@ -106,6 +108,79 @@ namespace KothBackend.Services
         public async Task AddBan(string playerUID)
         {
             await _bans.InsertOneAsync(new BsonDocument("playerUID", playerUID));
+        }
+
+        public async Task<BonusCodeResponse> GetBonusCode(string playerUID)
+        {
+            var bonusCode = await _bonusCodes
+                .Find(b => b.PlayerUID == playerUID && !b.IsUsed && b.DateEnd > DateTime.UtcNow)
+                .FirstOrDefaultAsync();
+
+            if (bonusCode == null)
+            {
+                return new BonusCodeResponse
+                {
+                    error = true,
+                    errorReason = "No bonus code found"
+                };
+            }
+
+            return new BonusCodeResponse
+            {
+                name = bonusCode.Name,
+                code = bonusCode.Code,
+                playerUID = bonusCode.PlayerUID,
+                multiplier = bonusCode.Multiplier.ToString(),
+                dateEnd = bonusCode.DateEnd.ToString("yyyy-MM-dd HH:mm:ss"),
+                error = false
+            };
+        }
+
+        public async Task<BonusCodeResponse> UseBonusCode(string code, string playerUID)
+        {
+            var bonusCode = await _bonusCodes
+                .Find(b => b.Code == code && !b.IsUsed && b.DateEnd > DateTime.UtcNow)
+                .FirstOrDefaultAsync();
+
+            if (bonusCode == null)
+            {
+                return new BonusCodeResponse
+                {
+                    error = true,
+                    errorReason = "Invalid or expired bonus code"
+                };
+            }
+
+            // Mark code as used
+            var update = Builders<BonusCode>.Update
+                .Set(b => b.IsUsed, true)
+                .Set(b => b.PlayerUID, playerUID);
+
+            await _bonusCodes.UpdateOneAsync(b => b.Code == code, update);
+
+            return new BonusCodeResponse
+            {
+                name = bonusCode.Name,
+                code = bonusCode.Code,
+                playerUID = playerUID,
+                multiplier = bonusCode.Multiplier.ToString(),
+                dateEnd = bonusCode.DateEnd.ToString("yyyy-MM-dd HH:mm:ss"),
+                error = false
+            };
+        }
+
+        public async Task CreateBonusCode(string code, string name, double multiplier, int validDays)
+        {
+            var bonusCode = new BonusCode
+            {
+                Code = code,
+                Name = name,
+                Multiplier = multiplier,
+                DateEnd = DateTime.UtcNow.AddDays(validDays),
+                IsUsed = false
+            };
+
+            await _bonusCodes.InsertOneAsync(bonusCode);
         }
     }
 }

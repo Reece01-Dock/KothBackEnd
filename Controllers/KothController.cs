@@ -168,14 +168,64 @@ namespace KothBackend.Controllers
         }
 
         [HttpGet("bonus")]
-        public ActionResult<BonusCodeResponse> GetBonus([FromQuery] string bohemiaUID)
+        public async Task<ActionResult<BonusCodeResponse>> GetBonus([FromQuery] string bohemiaUID)
         {
             ValidateApiKey();
-            return Ok(new BonusCodeResponse
+            var response = await _mongoService.GetBonusCode(bohemiaUID);
+            return Ok(response);
+        }
+
+        [HttpPost("bonusCode")]
+        public async Task<ActionResult<BonusCodeResponse>> UseBonusCode()
+        {
+            ValidateApiKey();
+
+            using var reader = new StreamReader(Request.Body);
+            var body = await reader.ReadToEndAsync();
+            var parts = body.Split('=', 2);
+
+            if (parts.Length < 2)
+                return BadRequest("Invalid request format");
+
+            try
             {
-                error = true,
-                errorReason = "No bonus code found"
-            });
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(parts[1]);
+                if (data == null || !data.ContainsKey("code") || !data.ContainsKey("playerUID"))
+                    return BadRequest("Invalid JSON format");
+
+                var response = await _mongoService.UseBonusCode(data["code"], data["playerUID"]);
+                return Ok(response);
+            }
+            catch (JsonException)
+            {
+                return BadRequest("Invalid JSON format");
+            }
+        }
+
+        [HttpPost("admin/bonuscode")]
+        public async Task<IActionResult> CreateBonusCode([FromBody] Dictionary<string, string> data)
+        {
+            ValidateApiKey();
+
+            if (!data.ContainsKey("code") || !data.ContainsKey("name") ||
+                !data.ContainsKey("multiplier") || !data.ContainsKey("validDays"))
+                return BadRequest("Missing required fields");
+
+            try
+            {
+                await _mongoService.CreateBonusCode(
+                    data["code"],
+                    data["name"],
+                    double.Parse(data["multiplier"]),
+                    int.Parse(data["validDays"])
+                );
+
+                return Ok(new { status = "success", message = "Bonus code created" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error creating bonus code: {ex.Message}");
+            }
         }
 
         [HttpPost("stats/votemap")]
