@@ -139,7 +139,7 @@ namespace KothBackend.Services
         public async Task<BonusCodeResponse> UseBonusCode(string code, string playerUID)
         {
             var bonusCode = await _bonusCodes
-                .Find(b => b.Code == code && !b.IsUsed && b.DateEnd > DateTime.UtcNow)
+                .Find(b => b.Code == code && b.DateEnd > DateTime.UtcNow)
                 .FirstOrDefaultAsync();
 
             if (bonusCode == null)
@@ -151,11 +151,18 @@ namespace KothBackend.Services
                 };
             }
 
-            // Mark code as used
-            var update = Builders<BonusCode>.Update
-                .Set(b => b.IsUsed, true)
-                .Set(b => b.PlayerUID, playerUID);
+            // Check if player already used this code
+            if (bonusCode.UsedByPlayers.Contains(playerUID))
+            {
+                return new BonusCodeResponse
+                {
+                    error = true,
+                    errorReason = "You have already used this bonus code"
+                };
+            }
 
+            // Add player to used list
+            var update = Builders<BonusCode>.Update.AddToSet(b => b.UsedByPlayers, playerUID);
             await _bonusCodes.UpdateOneAsync(b => b.Code == code, update);
 
             return new BonusCodeResponse
