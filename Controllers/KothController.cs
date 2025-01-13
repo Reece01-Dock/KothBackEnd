@@ -21,6 +21,7 @@ namespace KothBackend.Controllers
         {
             if (!Request.Headers.TryGetValue("X-AUTH-TOKEN", out var apiKey) || apiKey != API_KEY)
             {
+                Console.WriteLine(apiKey);
                 throw new UnauthorizedAccessException("Invalid API key");
             }
             return true;
