@@ -19,9 +19,17 @@ namespace KothBackend.Controllers
 
         private bool ValidateApiKey()
         {
-            if (!Request.Headers.TryGetValue("X-AUTH-TOKEN", out var apiKey) || apiKey != API_KEY)
+            if (!Request.Headers.TryGetValue("X-AUTH-TOKEN", out var apiKey))
             {
-                Console.WriteLine(apiKey);
+                Console.WriteLine("No API key provided");
+                throw new UnauthorizedAccessException("Invalid API key");
+            }
+
+            Console.WriteLine($"Received API key: {apiKey}");
+
+            if (apiKey != API_KEY)
+            {
+                Console.WriteLine("API key mismatch");
                 throw new UnauthorizedAccessException("Invalid API key");
             }
             return true;
