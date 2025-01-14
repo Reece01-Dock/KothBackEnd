@@ -197,24 +197,34 @@ namespace KothBackend.Controllers
             return Ok(bonus);
         }
 
-        [HttpPost("bonusCode")]  // Match the URL in the screenshot
-        [Consumes("application/x-www-form-urlencoded")]  // Explicitly specify content type
-        public async Task<ActionResult<BonusCode>> UseBonus([FromForm] string code, [FromForm] string playerUID)
+        [HttpPost("bonusCode")]
+        [Consumes("application/x-www-form-urlencoded")]
+        public async Task<ActionResult<BonusCode>> UseBonus([FromForm] string content)
         {
             try
             {
-                // Validate API key
                 ValidateApiKey();
 
-                var bonusCode = await _mongoService.UseBonusCode(code, playerUID);
+                // Parse the content string which contains JSON
+                var requestData = JsonSerializer.Deserialize<BonusCodeRequest>(content);
+
+                if (requestData == null || string.IsNullOrEmpty(requestData.Code) || string.IsNullOrEmpty(requestData.PlayerUID))
+                {
+                    return BadRequest(new { message = "Invalid request format" });
+                }
+
+                var bonusCode = await _mongoService.UseBonusCode(requestData.Code, requestData.PlayerUID);
 
                 if (bonusCode == null)
                 {
                     return NotFound(new { message = "Invalid or expired bonus code, or code already used by player" });
                 }
 
-                // Return JSON response
                 return Ok(bonusCode);
+            }
+            catch (JsonException)
+            {
+                return BadRequest(new { message = "Invalid JSON format in content" });
             }
             catch (Exception ex)
             {
