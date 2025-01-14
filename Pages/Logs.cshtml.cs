@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Antiforgery;
-using System.Text.Json;
-using System.Collections.Concurrent;
-using KothBackend.Models;
 using KothBackend.Services;
+using KothBackend.Models;
+using System.Text.Json;
 
 namespace KothBackend.Pages
 {
@@ -12,73 +11,117 @@ namespace KothBackend.Pages
     {
         private readonly IRequestLogService _logService;
         private readonly IAntiforgery _antiforgery;
-        private static readonly ConcurrentDictionary<string, StreamWriter> _clients = new();
+        private readonly ILogger<LogsModel> _logger;
 
         public IEnumerable<RequestLog> Logs { get; private set; } = new List<RequestLog>();
 
-        public LogsModel(IRequestLogService logService, IAntiforgery antiforgery)
+        public LogsModel(IRequestLogService logService, IAntiforgery antiforgery, ILogger<LogsModel> logger)
         {
             _logService = logService;
             _antiforgery = antiforgery;
+            _logger = logger;
         }
 
         public IActionResult OnGet()
         {
-            // Initially get the logs for first page load
-            Logs = _logService.GetLogs().Reverse();
-            var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
-            Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken!;
-            return Page();
+            try
+            {
+                _logger.LogInformation("Loading initial logs");
+                Logs = _logService.GetLogs().Reverse();
+                var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+                Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken!;
+                return Page();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading initial logs");
+                throw;
+            }
         }
 
         public async Task OnGetStream()
         {
-            Response.ContentType = "text/event-stream";
-            Response.Headers["Cache-Control"] = "no-cache";
-            Response.Headers["Connection"] = "keep-alive";
-
             try
             {
+                var response = Response;
+                response.Headers["Cache-Control"] = "no-cache";
+                response.Headers["Connection"] = "keep-alive";
+                response.ContentType = "text/event-stream";
+
                 // Send initial logs
+                _logger.LogInformation("Sending initial logs through SSE");
                 var initialLogs = _logService.GetLogs().Reverse();
                 foreach (var log in initialLogs)
                 {
-                    var json = JsonSerializer.Serialize(log);
-                    await Response.WriteAsync($"data: {json}\n\n");
-                    await Response.Body.FlushAsync();
+                    await SendLogToClient(log);
                 }
 
-                // Setup event handler for new logs
-                _logService.OnLogAdded += async (log) =>
+                // Handler for new logs
+                void NewLogHandler(RequestLog log)
                 {
                     try
                     {
-                        var json = JsonSerializer.Serialize(log);
-                        await Response.WriteAsync($"data: {json}\n\n");
-                        await Response.Body.FlushAsync();
+                        SendLogToClient(log).Wait();
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Connection might be closed
+                        _logger.LogError(ex, "Error sending log through SSE");
                     }
-                };
+                }
 
-                // Keep connection alive
-                while (!HttpContext.RequestAborted.IsCancellationRequested)
+                // Subscribe to new logs
+                _logService.OnLogAdded += NewLogHandler;
+
+                try
                 {
-                    await Task.Delay(1000);
+                    _logger.LogInformation("Starting SSE connection");
+                    // Keep the connection alive
+                    while (!HttpContext.RequestAborted.IsCancellationRequested)
+                    {
+                        await Task.Delay(1000);
+                    }
+                }
+                finally
+                {
+                    _logger.LogInformation("SSE connection ended");
+                    _logService.OnLogAdded -= NewLogHandler;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Connection closed
+                _logger.LogError(ex, "Error in SSE stream");
+                throw;
+            }
+        }
+
+        private async Task SendLogToClient(RequestLog log)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(log);
+                await Response.WriteAsync($"data: {json}\n\n");
+                await Response.Body.FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending individual log");
+                throw;
             }
         }
 
         public IActionResult OnPostClear()
         {
-            _logService.ClearLogs();
-            return RedirectToPage();
+            try
+            {
+                _logger.LogInformation("Clearing logs");
+                _logService.ClearLogs();
+                return RedirectToPage();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing logs");
+                throw;
+            }
         }
     }
 }
