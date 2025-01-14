@@ -31,9 +31,25 @@
         .json-content {
             font-family: monospace;
         }
-        #autoRefreshStatus {
+        .connection-status {
             font-size: 0.9em;
-            color: #6c757d;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .connection-status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .connection-status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        tr.new-log {
+            animation: highlight 2s ease-out;
+        }
+        keyframes highlight {
+            0% { background-color: #fff3cd; }
+            100% { background-color: transparent; }
         }
     </style>
 </head>
@@ -42,15 +58,15 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1>Request Logs</h1>
             <div>
-                <button id="toggleRefresh" class="btn btn-outline-primary me-2">Auto-refresh: ON</button>
-                <span id="autoRefreshStatus">Next refresh in 5s</span>
+                <span id="connectionStatus" class="connection-status">Connecting...</span>
             </div>
         </div>
         <div class="mb-3">
             <form id="clearForm" method="post" asp-page-handler="Clear" class="d-inline">
+                @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-danger">Clear Logs</button>
             </form>
-            <span class="ms-3">Showing last @Model.Logs.Count() entries</span>
+            <span class="ms-3">Showing last <span id="logCount">@Model.Logs.Count()</span> entries</span>
         </div>
         <div class="table-responsive">
             <table class="table table-striped table-hover">
@@ -65,121 +81,266 @@
                         <th>Details</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="logTableBody">
                     @foreach (var log in Model.Logs)
                     {
-                            <tr>
-                                <td class="timestamp">@log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</td>
-                                <td><code>@log.Id</code></td>
-                                <td>
-                                    <span class="badge method-badge @GetMethodClass(log.Method)">
+                        <tr id="log-@log.Id">
+                            <td class="timestamp">@log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</td>
+                            <td><code>@log.Id</code></td>
+                            <td>
+                                <span class="badge method-badge @GetMethodClass(log.Method)">
                                     @log.Method
-                                    </span>
-                                </td>
-                                <td>
+                                </span>
+                            </td>
+                            <td>
                                 @log.Path@log.QueryString
-                                </td>
-                                <td>
-                                    <span class="badge @GetStatusClass(log.ResponseStatusCode)">
+                            </td>
+                            <td>
+                                <span class="badge @GetStatusClass(log.ResponseStatusCode)">
                                     @log.ResponseStatusCode
-                                    </span>
-                                </td>
-                                <td>@log.Duration.TotalMilliseconds.ToString("0.00")ms</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary" type="button" 
-                                            data-bs-toggle="collapse" data-bs-target="#details-@log.Id">
-                                        View Details
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td colspan="7" class="p-0">
-                                    <div class="collapse" id="details-@log.Id">
-                                        <div class="card card-body m-2">
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <h6 class="mb-3">Request</h6>
-                                                    <div class="mb-3">
-                                                        <strong>Headers</strong>
-                                                        <div class="log-details">
-                                                            <pre>@GetHeadersString(log.Headers)</pre>
-                                                        </div>
+                                </span>
+                            </td>
+                            <td>@log.Duration.TotalMilliseconds.ToString("0.00")ms</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#details-@log.Id">
+                                    View Details
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="7" class="p-0">
+                                <div class="collapse" id="details-@log.Id">
+                                    <div class="card card-body m-2">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6 class="mb-3">Request</h6>
+                                                <div class="mb-3">
+                                                    <strong>Headers</strong>
+                                                    <div class="log-details">
+                                                        <pre>@GetHeadersString(log.Headers)</pre>
                                                     </div>
-
+                                                </div>
+                                                
                                                 @if (!string.IsNullOrEmpty(log.Body))
                                                 {
-                                                            <div class="mb-3">
-                                                                <strong>Body</strong>
-                                                                <div class="log-details">
-                                                                    <pre class="json-content">@FormatJson(log.Body)</pre>
-                                                                </div>
-                                                            </div>
-                                                }
-                                                </div>
-
-                                                <div class="col-md-6">
-                                                    <h6 class="mb-3">Response</h6>
                                                     <div class="mb-3">
-                                                        <strong>Headers</strong>
+                                                        <strong>Body</strong>
                                                         <div class="log-details">
-                                                            <pre>@GetHeadersString(log.ResponseHeaders)</pre>
+                                                            <pre class="json-content">@FormatJson(log.Body)</pre>
                                                         </div>
                                                     </div>
-
+                                                }
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                <h6 class="mb-3">Response</h6>
+                                                <div class="mb-3">
+                                                    <strong>Headers</strong>
+                                                    <div class="log-details">
+                                                        <pre>@GetHeadersString(log.ResponseHeaders)</pre>
+                                                    </div>
+                                                </div>
+                                                
                                                 @if (!string.IsNullOrEmpty(log.ResponseBody))
                                                 {
-                                                            <div class="mb-3">
-                                                                <strong>Body</strong>
-                                                                <div class="log-details">
-                                                                    <pre class="json-content">@FormatJson(log.ResponseBody)</pre>
-                                                                </div>
-                                                            </div>
+                                                    <div class="mb-3">
+                                                        <strong>Body</strong>
+                                                        <div class="log-details">
+                                                            <pre class="json-content">@FormatJson(log.ResponseBody)</pre>
+                                                        </div>
+                                                    </div>
                                                 }
-                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </td>
-                            </tr>
+                                </div>
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
         </div>
     </div>
 
+    <template id="logRowTemplate">
+        <tr>
+            <td class="timestamp"></td>
+            <td><code></code></td>
+            <td>
+                <span class="badge method-badge"></span>
+            </td>
+            <td class="path"></td>
+            <td>
+                <span class="badge"></span>
+            </td>
+            <td class="duration"></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse">
+                    View Details
+                </button>
+            </td>
+        </tr>
+    </template>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let autoRefreshEnabled = true;
-        let countdown = 5;
-        const toggleBtn = document.getElementById('toggleRefresh');
-        const statusSpan = document.getElementById('autoRefreshStatus');
+        const statusElement = document.getElementById('connectionStatus');
+        const logCountElement = document.getElementById('logCount');
+        const logTableBody = document.getElementById('logTableBody');
         const clearForm = document.getElementById('clearForm');
+        let logCount = parseInt(logCountElement.textContent);
 
-        function updateCountdown() {
-            if (autoRefreshEnabled) {
-                statusSpan.textContent = `Next refresh in ${countdown}s`;
-                countdown--;
-                if (countdown < 0) {
-                    countdown = 5;
-                    window.location.reload();
-                }
+        function getMethodClass(method) {
+            switch (method.toUpperCase()) {
+                case 'GET': return 'bg-success text-white';
+                case 'POST': return 'bg-primary text-white';
+                case 'PUT': return 'bg-warning text-dark';
+                case 'DELETE': return 'bg-danger text-white';
+                case 'PATCH': return 'bg-info text-dark';
+                default: return 'bg-secondary text-white';
             }
         }
 
-        toggleBtn.addEventListener('click', () => {
-            autoRefreshEnabled = !autoRefreshEnabled;
-            toggleBtn.textContent = `Auto-refresh: ${autoRefreshEnabled ? 'ON' : 'OFF'}`;
-            toggleBtn.classList.toggle('btn-outline-primary');
-            toggleBtn.classList.toggle('btn-outline-secondary');
-            if (autoRefreshEnabled) {
-                countdown = 5;
-                statusSpan.textContent = `Next refresh in ${countdown}s`;
-            } else {
-                statusSpan.textContent = 'Auto-refresh disabled';
-            }
-        });
+        function getStatusClass(statusCode) {
+            if (statusCode >= 200 && statusCode < 300) return 'bg-success';
+            if (statusCode >= 300 && statusCode < 400) return 'bg-info';
+            if (statusCode >= 400 && statusCode < 500) return 'bg-warning';
+            if (statusCode >= 500) return 'bg-danger';
+            return 'bg-secondary';
+        }
 
-        // Handle clear logs with AJAX
+        function formatJson(content) {
+            try {
+                if (content.startsWith('{') || content.startsWith('[')) {
+                    return JSON.stringify(JSON.parse(content), null, 2);
+                }
+            } catch {}
+            return content;
+        }
+
+        function createLogRow(log) {
+            const template = document.getElementById('logRowTemplate');
+            const row = template.content.cloneNode(true).querySelector('tr');
+            
+            row.id = `log-${log.id}`;
+            row.classList.add('new-log');
+
+            const [timestamp, id, method, path, status, duration, details] = row.cells;
+            
+            timestamp.textContent = new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23);
+            id.querySelector('code').textContent = log.id;
+            
+            const methodBadge = method.querySelector('.badge');
+            methodBadge.textContent = log.method;
+            methodBadge.className = `badge method-badge ${getMethodClass(log.method)}`;
+            
+            path.textContent = log.path + log.queryString;
+            
+            const statusBadge = status.querySelector('.badge');
+            statusBadge.textContent = log.responseStatusCode;
+            statusBadge.className = `badge ${getStatusClass(log.responseStatusCode)}`;
+            
+            duration.textContent = `${log.duration.totalMilliseconds.toFixed(2)}ms`;
+            
+            const detailsButton = details.querySelector('button');
+            detailsButton.setAttribute('data-bs-target', `#details-${log.id}`);
+
+            // Create details row
+            const detailsRow = document.createElement('tr');
+            detailsRow.innerHTML = `
+                <td colspan="7" class="p-0">
+                    <div class="collapse" id="details-${log.id}">
+                        <div class="card card-body m-2">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Request</h6>
+                                    <div class="mb-3">
+                                        <strong>Headers</strong>
+                                        <div class="log-details">
+                                            <pre>${Object.entries(log.headers).map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
+                                        </div>
+                                    </div>
+                                    ${log.body ? `
+                                    <div class="mb-3">
+                                        <strong>Body</strong>
+                                        <div class="log-details">
+                                            <pre class="json-content">${formatJson(log.body)}</pre>
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Response</h6>
+                                    <div class="mb-3">
+                                        <strong>Headers</strong>
+                                        <div class="log-details">
+                                            <pre>${Object.entries(log.responseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
+                                        </div>
+                                    </div>
+                                    ${log.responseBody ? `
+                                    <div class="mb-3">
+                                        <strong>Body</strong>
+                                        <div class="log-details">
+                                            <pre class="json-content">${formatJson(log.responseBody)}</pre>
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            `;
+
+            return [row, detailsRow];
+        }
+
+        // Set up SSE
+        function connectSSE() {
+            const eventSource = new EventSource('?handler=Stream');
+
+            eventSource.onopen = () => {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'connection-status connected';
+            };
+
+            eventSource.onmessage = (event) => {
+                const log = JSON.parse(event.data);
+                const [logRow, detailsRow] = createLogRow(log);
+                
+                // Insert at the top of the table
+                if (logTableBody.firstChild) {
+                    logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
+                    logTableBody.insertBefore(logRow, logTableBody.firstChild);
+                } else {
+                    logTableBody.appendChild(logRow);
+                    logTableBody.appendChild(detailsRow);
+                }
+                
+                // Update count
+                logCount++;
+                logCountElement.textContent = logCount;
+
+                // Remove highlight class after animation
+                setTimeout(() => logRow.classList.remove('new-log'), 2000);
+            };
+
+            eventSource.onerror = () => {
+                statusElement.textContent = 'Disconnected - Reconnecting...';
+                statusElement.className = 'connection-status disconnected';
+                
+                // Try to reconnect after a short delay
+                setTimeout(() => {
+                    eventSource.close();
+                    connectSSE();
+                }, 3000);
+            };
+
+            return eventSource;
+        }
+
+        // Handle clear logs
         clearForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             try {
@@ -190,14 +351,17 @@
                     }
                 });
                 if (response.ok) {
-                    window.location.reload();
+                    logTableBody.innerHTML = '';
+                    logCount = 0;
+                    logCountElement.textContent = '0';
                 }
             } catch (error) {
                 console.error('Error clearing logs:', error);
             }
         });
 
-        setInterval(updateCountdown, 1000);
+        // Start SSE connection
+        let eventSource = connectSSE();
     </script>
 </body>
 </html>
