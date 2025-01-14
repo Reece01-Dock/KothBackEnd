@@ -12,6 +12,15 @@ namespace KothBackend.Middleware
         private readonly ILogger<RequestLoggingMiddleware> _logger;
         private readonly IRequestLogService _logService;
 
+        // Paths to exclude from logging
+        private readonly HashSet<string> _excludedPaths = new()
+        {
+            "/logs",              // Main logs page
+            "/favicon.ico",       // Browser favicon requests
+            "/css",              // Static CSS files
+            "/js"                // Static JS files
+        };
+
         public RequestLoggingMiddleware(
             RequestDelegate next,
             ILogger<RequestLoggingMiddleware> logger,
@@ -24,24 +33,39 @@ namespace KothBackend.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var log = new RequestLog();
-            var sw = Stopwatch.StartNew();
+            // Check if this is a path we should exclude
+            bool shouldLog = !_excludedPaths.Any(path =>
+                context.Request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
+
+            var log = shouldLog ? new RequestLog() : null;
+            var sw = shouldLog ? Stopwatch.StartNew() : null;
 
             try
             {
-                // Capture request details
-                await CaptureRequest(context.Request, log);
+                if (shouldLog)
+                {
+                    await CaptureRequest(context.Request, log!);
+                }
 
-                // Capture the response body
-                var originalBodyStream = context.Response.Body;
-                using var responseBodyStream = new ResponseCaptureStream(originalBodyStream);
-                context.Response.Body = responseBodyStream;
+                // Create response capture stream if needed
+                Stream originalBody = context.Response.Body;
+                ResponseCaptureStream? responseStream = null;
+
+                if (shouldLog)
+                {
+                    responseStream = new ResponseCaptureStream(originalBody);
+                    context.Response.Body = responseStream;
+                }
 
                 // Call the next middleware in the pipeline
                 await _next(context);
 
-                // Capture response details including body
-                CaptureResponse(context.Response, responseBodyStream, log);
+                // Capture response if needed
+                if (shouldLog && responseStream != null)
+                {
+                    CaptureResponse(context.Response, responseStream, log!);
+                    context.Response.Body = originalBody;
+                }
             }
             catch (Exception ex)
             {
@@ -50,9 +74,12 @@ namespace KothBackend.Middleware
             }
             finally
             {
-                sw.Stop();
-                log.Duration = sw.Elapsed;
-                _logService.AddLog(log);
+                if (shouldLog && sw != null && log != null)
+                {
+                    sw.Stop();
+                    log.Duration = sw.Elapsed;
+                    _logService.AddLog(log);
+                }
             }
         }
 
@@ -73,7 +100,6 @@ namespace KothBackend.Middleware
             {
                 try
                 {
-                    // Enable buffering for the request body
                     request.EnableBuffering();
 
                     using var reader = new StreamReader(
