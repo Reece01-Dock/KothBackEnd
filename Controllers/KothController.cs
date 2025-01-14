@@ -186,8 +186,8 @@ namespace KothBackend.Controllers
             return Ok(new ListPlayerBan { m_list = bans });
         }
 
-        [HttpGet("bonus")]  // Match the URL pattern shown in screenshot
-        public async Task<ActionResult<BonusCode>> GetBonus(string bohemiaUID)
+        [HttpGet("bonus")]  // Matches /api/bonus
+        public async Task<ActionResult<BonusCode>> GetBonus([FromQuery] string bohemiaUID)  // Use FromQuery to get from querystring
         {
             try
             {
