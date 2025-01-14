@@ -189,5 +189,15 @@ namespace KothBackend.Services
 
             await _bonusCodes.InsertOneAsync(bonusCode);
         }
+        
+        public async Task<List<PlayerProfile>> GetAllProfiles()
+        {
+            return await _profiles.Find(new BsonDocument()).ToListAsync();
+        }
+
+        public async Task<List<PlayerStats>> GetAllPlayerStats()
+        {
+            return await _stats.Find(new BsonDocument()).ToListAsync();
+        }
     }
 }

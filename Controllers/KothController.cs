@@ -19,19 +19,19 @@ namespace KothBackend.Controllers
 
         private bool ValidateApiKey()
         {
-            if (!Request.Headers.TryGetValue("X-AUTH-TOKEN", out var apiKey))
-            {
-                Console.WriteLine("No API key provided");
-                throw new UnauthorizedAccessException("Invalid API key");
-            }
+            //if (!Request.Headers.TryGetValue("X-AUTH-TOKEN", out var apiKey))
+            //{
+            //    Console.WriteLine("No API key provided");
+            //    throw new UnauthorizedAccessException("Invalid API key");
+            //}
 
-            Console.WriteLine($"Received API key: {apiKey}");
+            //Console.WriteLine($"Received API key: {apiKey}");
 
-            if (apiKey != API_KEY)
-            {
-                Console.WriteLine("API key mismatch");
-                throw new UnauthorizedAccessException("Invalid API key");
-            }
+            //if (apiKey != API_KEY)
+            //{
+            //    Console.WriteLine("API key mismatch");
+            //    throw new UnauthorizedAccessException("Invalid API key");
+            //}
             return true;
         }
 
@@ -95,26 +95,16 @@ namespace KothBackend.Controllers
         {
             ValidateApiKey();
 
-            using var reader = new StreamReader(Request.Body);
-            var body = await reader.ReadToEndAsync();
-            var parts = body.Split('=', 2);
+            // Fetch all profiles from the database
+            var dbProfiles = await _mongoService.GetAllProfiles();
 
-            if (parts.Length < 2)
-                return BadRequest("Invalid request format");
-
-            try
+            // Wrap profiles in ListPlayerProfile to match the response structure
+            var response = new ListPlayerProfile
             {
-                var profiles = JsonSerializer.Deserialize<ListPlayerProfile>(parts[1]);
-                if (profiles == null)
-                    return BadRequest("Invalid JSON format");
+                m_list = dbProfiles
+            };
 
-                await _mongoService.UpdateProfiles(profiles.m_list);
-                return Ok(new { status = "success", message = $"Updated {profiles.m_list.Count} profiles" });
-            }
-            catch (JsonException)
-            {
-                return BadRequest("Invalid JSON format");
-            }
+            return Ok(response); // Return the profiles
         }
 
         [HttpGet("stats/playerstats")]
@@ -130,26 +120,16 @@ namespace KothBackend.Controllers
         {
             ValidateApiKey();
 
-            using var reader = new StreamReader(Request.Body);
-            var body = await reader.ReadToEndAsync();
-            var parts = body.Split('=', 2);
+            // Fetch all stats from the database
+            var dbStats = await _mongoService.GetAllPlayerStats();
 
-            if (parts.Length < 2)
-                return BadRequest("Invalid request format");
-
-            try
+            // Wrap stats in ListPlayerStats to match the response structure
+            var response = new ListPlayerStats
             {
-                var statsList = JsonSerializer.Deserialize<ListPlayerStats>(parts[1]);
-                if (statsList == null)
-                    return BadRequest("Invalid JSON format");
+                m_list = dbStats
+            };
 
-                await _mongoService.UpdatePlayerStats(statsList.m_list);
-                return Ok(new { status = "success", message = $"Updated stats for {statsList.m_list.Count} players" });
-            }
-            catch (JsonException)
-            {
-                return BadRequest("Invalid JSON format");
-            }
+            return Ok(response); // Return the stats
         }
 
         [HttpPost("preset/{playerUID}")]
