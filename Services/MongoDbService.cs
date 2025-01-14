@@ -123,6 +123,8 @@ namespace KothBackend.Services
                 return null;
             }
 
+            bonusCode.PlayerUID = playerUID;
+
             return bonusCode;
         }
 
@@ -148,6 +150,7 @@ namespace KothBackend.Services
             // Add the player to the UsedByPlayers list
             bonusCode.UsedByPlayers.Add(playerUID);
             await _bonusCodes.ReplaceOneAsync(b => b.Code == code, bonusCode);
+            bonusCode.PlayerUID = playerUID;
 
             return bonusCode;
         }

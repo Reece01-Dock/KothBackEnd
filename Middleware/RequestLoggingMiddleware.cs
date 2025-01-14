@@ -35,28 +35,41 @@ namespace KothBackend.Middleware
             bool shouldLog = !_excludedPaths.Any(path =>
                 context.Request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
 
-            RequestLog? log = null;
+            if (!shouldLog)
+            {
+                await _next(context);
+                return;
+            }
+
+            var log = new RequestLog();
             var sw = Stopwatch.StartNew();
 
-            if (shouldLog)
-            {
-                log = new RequestLog();
-                await CaptureRequest(context.Request, log);
-            }
+            var originalBodyStream = context.Response.Body;
+            using var responseBodyStream = new MemoryStream();
+            context.Response.Body = responseBodyStream;
 
             try
             {
+                // Capture request
+                await CaptureRequest(context.Request, log);
+
+                // Process request
                 await _next(context);
+
+                // Capture response
+                await CaptureResponse(context.Response, responseBodyStream, log);
+
+                // Copy the response to the original stream
+                responseBodyStream.Position = 0;
+                await responseBodyStream.CopyToAsync(originalBodyStream);
             }
             finally
             {
-                if (shouldLog && log != null)
-                {
-                    sw.Stop();
-                    log.Duration = sw.Elapsed;
-                    CaptureResponse(context.Response, log);
-                    _logService.AddLog(log);
-                }
+                sw.Stop();
+                log.Duration = sw.Elapsed;
+                context.Response.Body = originalBodyStream;
+
+                _logService.AddLog(log);
             }
         }
 
@@ -94,13 +107,29 @@ namespace KothBackend.Middleware
             }
         }
 
-        private void CaptureResponse(HttpResponse response, RequestLog log)
+        private async Task CaptureResponse(HttpResponse response, MemoryStream responseBodyStream, RequestLog log)
         {
             log.ResponseStatusCode = response.StatusCode;
 
             foreach (var (key, value) in response.Headers)
             {
                 log.ResponseHeaders[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
+            }
+
+            if (IsTextBasedContentType(response.ContentType))
+            {
+                try
+                {
+                    responseBodyStream.Position = 0;
+                    using var reader = new StreamReader(responseBodyStream, Encoding.UTF8);
+                    log.ResponseBody = await reader.ReadToEndAsync();
+                    responseBodyStream.Position = 0;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unable to read response body");
+                    log.ResponseBody = "[Error reading response body]";
+                }
             }
         }
 
