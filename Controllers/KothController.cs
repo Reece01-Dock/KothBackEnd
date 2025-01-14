@@ -197,30 +197,27 @@ namespace KothBackend.Controllers
             return Ok(bonus);
         }
 
-        [HttpPost("bonusCode")]
-        public async Task<ActionResult<BonusCodeResponse>> UseBonusCode()
+        [HttpPost("bonus")]
+        public async Task<ActionResult<BonusCode>> UseBonus([FromBody] BonusCodeRequest request)
         {
-            ValidateApiKey();
-
-            using var reader = new StreamReader(Request.Body);
-            var body = await reader.ReadToEndAsync();
-            var parts = body.Split('=', 2);
-
-            if (parts.Length < 2)
-                return BadRequest("Invalid request format");
-
             try
             {
-                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(parts[1]);
-                if (data == null || !data.ContainsKey("code") || !data.ContainsKey("playerUID"))
-                    return BadRequest("Invalid JSON format");
+                // Validate API key
+                ValidateApiKey();
 
-                var response = await _mongoService.UseBonusCode(data["code"], data["playerUID"]);
-                return Ok(response);
+                // Use the bonus code - this already handles all the logic we need
+                var bonusCode = await _mongoService.UseBonusCode(request.Code, request.PlayerUID);
+
+                if (bonusCode == null)
+                {
+                    return NotFound(new { message = "Invalid or expired bonus code, or code already used by player" });
+                }
+
+                return Ok(bonusCode);
             }
-            catch (JsonException)
+            catch (Exception ex)
             {
-                return BadRequest("Invalid JSON format");
+                return BadRequest(new { message = ex.Message });
             }
         }
 
