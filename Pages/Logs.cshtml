@@ -294,7 +294,9 @@
         logRow.id = `log-${log.id}`;
         logRow.classList.add('new-log');
 
-        const timestamp = new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23);
+        // Format the timestamp safely
+        const timestamp = log.timestamp ? new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23) : 'Invalid Date';
+
         logRow.innerHTML = `
             <td class="timestamp">${timestamp}</td>
             <td><code>${log.id}</code></td>
@@ -305,7 +307,7 @@
             <td>
                 <span class="badge ${getStatusClass(log.responseStatusCode)}">${log.responseStatusCode}</span>
             </td>
-            <td>${log.duration.totalMilliseconds.toFixed(2)}ms</td>
+            <td>${log.duration ? log.duration.totalMilliseconds.toFixed(2) : '0.00'}ms</td>
             <td>
                 <button class="btn btn-sm btn-outline-primary" type="button" 
                         data-bs-toggle="collapse" data-bs-target="#details-${log.id}">
