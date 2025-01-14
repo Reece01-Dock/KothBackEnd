@@ -186,15 +186,26 @@ namespace KothBackend.Controllers
             return Ok(new ListPlayerBan { m_list = bans });
         }
 
-        [HttpGet("bonus")]
-        public async Task<ActionResult<BonusCodeResponse>> GetBonus([FromQuery] string bohemiaUID)
+        [HttpGet("bonus")]  // Match the URL pattern shown in screenshot
+        public async Task<ActionResult<BonusCode>> GetBonus(string bohemiaUID)
         {
-            // Validate API key
-            ValidateApiKey();
+            try
+            {
+                ValidateApiKey();
 
-            // Get bonus code from MongoDB service
-            var bonus = await _mongoService.GetBonusCode(bohemiaUID);
-            return Ok(bonus);
+                var bonus = await _mongoService.GetBonusCode(bohemiaUID);
+
+                if (bonus == null)
+                {
+                    return NotFound(new { message = "No valid bonus code available" });
+                }
+
+                return Ok(bonus);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("bonusCode")]

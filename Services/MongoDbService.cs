@@ -114,18 +114,21 @@ namespace KothBackend.Services
         {
             // Find the first valid bonus code that hasn't been used by the player
             var bonusCode = await _bonusCodes
-                .Find(b => !b.UsedByPlayers.Contains(playerUID) && DateTime.Parse(b.DateEnd) > DateTime.UtcNow)
-                .FirstOrDefaultAsync();
+                .Find(b => !b.UsedByPlayers.Contains(playerUID))  // First check player hasn't used it
+                .ToListAsync();  // Get all potential codes
 
-            // If no valid bonus code is found, return null
-            if (bonusCode == null)
+            // Then filter for valid dates in memory where we have better DateTime handling
+            var validCode = bonusCode
+                .Where(b => DateTime.TryParse(b.DateEnd, out DateTime endDate) && endDate > DateTime.UtcNow)
+                .FirstOrDefault();
+
+            if (validCode == null)
             {
                 return null;
             }
 
-            bonusCode.PlayerUID = playerUID;
-
-            return bonusCode;
+            validCode.PlayerUID = playerUID;
+            return validCode;
         }
 
         public async Task<BonusCode?> UseBonusCode(string code, string playerUID)
