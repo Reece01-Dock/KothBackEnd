@@ -12,11 +12,10 @@ namespace KothBackend.Middleware
         private readonly ILogger<RequestLoggingMiddleware> _logger;
         private readonly IRequestLogService _logService;
 
-        // Paths to exclude from logging
         private readonly HashSet<string> _excludedPaths = new()
         {
-            "/logs",              // Main logs page
-            "/favicon.ico"        // Browser favicon requests
+            "/logs",
+            "/favicon.ico"
         };
 
         public RequestLoggingMiddleware(
@@ -31,7 +30,6 @@ namespace KothBackend.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            // Check if this is a path we should exclude
             bool shouldLog = !_excludedPaths.Any(path =>
                 context.Request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
 
@@ -44,31 +42,44 @@ namespace KothBackend.Middleware
             var log = new RequestLog();
             var sw = Stopwatch.StartNew();
 
-            var originalBodyStream = context.Response.Body;
-            using var responseBodyStream = new MemoryStream();
-            context.Response.Body = responseBodyStream;
+            // Capture the original body stream
+            var originalBody = context.Response.Body;
 
             try
             {
-                // Capture request
-                await CaptureRequest(context.Request, log);
+                // Create a new memory stream
+                using (var memStream = new MemoryStream())
+                {
+                    // Set the response body to the memory stream
+                    context.Response.Body = memStream;
 
-                // Process request
-                await _next(context);
+                    // Capture request details
+                    await CaptureRequest(context.Request, log);
 
-                // Capture response
-                await CaptureResponse(context.Response, responseBodyStream, log);
+                    // Call the next middleware
+                    await _next(context);
 
-                // Copy the response to the original stream
-                responseBodyStream.Position = 0;
-                await responseBodyStream.CopyToAsync(originalBodyStream);
+                    // Capture response details
+                    memStream.Position = 0;
+                    using (var reader = new StreamReader(memStream))
+                    {
+                        log.ResponseBody = await reader.ReadToEndAsync();
+                    }
+
+                    // Copy the response to the original stream
+                    memStream.Position = 0;
+                    await memStream.CopyToAsync(originalBody);
+                }
             }
             finally
             {
+                // Always restore the original stream
+                context.Response.Body = originalBody;
+
+                // Complete the log
                 sw.Stop();
                 log.Duration = sw.Elapsed;
-                context.Response.Body = originalBodyStream;
-
+                CaptureResponseDetails(context.Response, log);
                 _logService.AddLog(log);
             }
         }
@@ -107,41 +118,30 @@ namespace KothBackend.Middleware
             }
         }
 
-        private async Task CaptureResponse(HttpResponse response, MemoryStream responseBodyStream, RequestLog log)
+        private void CaptureResponseDetails(HttpResponse response, RequestLog log)
         {
             log.ResponseStatusCode = response.StatusCode;
 
             foreach (var (key, value) in response.Headers)
             {
-                log.ResponseHeaders[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
+                if (!log.ResponseHeaders.ContainsKey(key))
+                {
+                    log.ResponseHeaders[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
+                }
             }
 
-            if (IsTextBasedContentType(response.ContentType))
-            {
-                try
-                {
-                    responseBodyStream.Position = 0;
-                    using var reader = new StreamReader(responseBodyStream, Encoding.UTF8);
-                    log.ResponseBody = await reader.ReadToEndAsync();
-                    responseBodyStream.Position = 0;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Unable to read response body");
-                    log.ResponseBody = "[Error reading response body]";
-                }
-            }
+            // Don't try to read the response body here - it's already been captured
         }
 
         private bool IsTextBasedContentType(string? contentType)
         {
             if (string.IsNullOrEmpty(contentType)) return false;
 
-            return contentType.Contains("json") ||
-                   contentType.Contains("xml") ||
-                   contentType.Contains("text") ||
-                   contentType.Contains("form-data") ||
-                   contentType.Contains("form-urlencoded");
+            return contentType.Contains("json", StringComparison.OrdinalIgnoreCase) ||
+                   contentType.Contains("xml", StringComparison.OrdinalIgnoreCase) ||
+                   contentType.Contains("text", StringComparison.OrdinalIgnoreCase) ||
+                   contentType.Contains("form-data", StringComparison.OrdinalIgnoreCase) ||
+                   contentType.Contains("form-urlencoded", StringComparison.OrdinalIgnoreCase);
         }
     }
 
