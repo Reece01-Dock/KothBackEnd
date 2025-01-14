@@ -43,56 +43,54 @@ namespace KothBackend.Pages
         {
             try
             {
-                // Set response headers before writing any data
-                Response.Headers.Add("Cache-Control", "no-cache");
-                Response.Headers.Add("Connection", "keep-alive");
-                Response.ContentType = "text/event-stream";
-
-                // Keep track of connection status
-                var isConnected = true;
-                HttpContext.RequestAborted.Register(() => isConnected = false);
+                var response = Response;
+                response.Headers["Cache-Control"] = "no-cache";
+                response.Headers["Connection"] = "keep-alive";
+                response.ContentType = "text/event-stream";
 
                 // Send initial logs
+                _logger.LogInformation("Sending initial logs through SSE");
                 var initialLogs = _logService.GetLogs().Reverse();
                 foreach (var log in initialLogs)
                 {
-                    if (!isConnected) break;
-
-                    var json = JsonSerializer.Serialize(log);
-                    await Response.WriteAsync($"data: {json}\n\n");
-                    await Response.Body.FlushAsync();
+                    await SendLogToClient(log);
                 }
 
                 // Handler for new logs
                 void NewLogHandler(RequestLog log)
                 {
-                    if (!isConnected) return;
-
-                    var json = JsonSerializer.Serialize(log);
-                    Response.WriteAsync($"data: {json}\n\n").Wait();
-                    Response.Body.FlushAsync().Wait();
+                    try
+                    {
+                        SendLogToClient(log).Wait();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error sending log through SSE");
+                    }
                 }
+
+                // Subscribe to new logs
+                _logService.OnLogAdded += NewLogHandler;
 
                 try
                 {
-                    // Subscribe to new logs
-                    _logService.OnLogAdded += NewLogHandler;
-
-                    // Keep connection alive while client is connected
-                    while (isConnected && !HttpContext.RequestAborted.IsCancellationRequested)
+                    _logger.LogInformation("Starting SSE connection");
+                    // Keep the connection alive
+                    while (!HttpContext.RequestAborted.IsCancellationRequested)
                     {
                         await Task.Delay(1000);
                     }
                 }
                 finally
                 {
-                    _logService.OnLogAdded -= NewLogHandler;
                     _logger.LogInformation("SSE connection ended");
+                    _logService.OnLogAdded -= NewLogHandler;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in SSE stream");
+                throw;
             }
         }
 
