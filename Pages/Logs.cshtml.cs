@@ -24,7 +24,8 @@ namespace KothBackend.Pages
 
         public IActionResult OnGet()
         {
-            Logs = _logService.GetLogs();
+            // Initially get the logs for first page load
+            Logs = _logService.GetLogs().Reverse();
             var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
             Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken!;
             return Page();
@@ -32,58 +33,45 @@ namespace KothBackend.Pages
 
         public async Task OnGetStream()
         {
-            var response = Response;
-            response.ContentType = "text/event-stream";
-            response.Headers["Cache-Control"] = "no-cache";
-            response.Headers["Connection"] = "keep-alive";
-
-            // Generate a unique client ID
-            string clientId = Guid.NewGuid().ToString();
+            Response.ContentType = "text/event-stream";
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["Connection"] = "keep-alive";
 
             try
             {
-                using var writer = new StreamWriter(response.Body);
-                _clients[clientId] = writer;
-
                 // Send initial logs
-                var initialLogs = _logService.GetLogs();
+                var initialLogs = _logService.GetLogs().Reverse();
                 foreach (var log in initialLogs)
                 {
-                    await SendLogToClient(writer, log);
+                    var json = JsonSerializer.Serialize(log);
+                    await Response.WriteAsync($"data: {json}\n\n");
+                    await Response.Body.FlushAsync();
                 }
 
-                // Subscribe to new logs
+                // Setup event handler for new logs
                 _logService.OnLogAdded += async (log) =>
                 {
-                    if (_clients.TryGetValue(clientId, out var clientWriter))
+                    try
                     {
-                        await SendLogToClient(clientWriter, log);
+                        var json = JsonSerializer.Serialize(log);
+                        await Response.WriteAsync($"data: {json}\n\n");
+                        await Response.Body.FlushAsync();
+                    }
+                    catch
+                    {
+                        // Connection might be closed
                     }
                 };
 
-                // Keep the connection alive
+                // Keep connection alive
                 while (!HttpContext.RequestAborted.IsCancellationRequested)
                 {
                     await Task.Delay(1000);
                 }
             }
-            finally
-            {
-                _clients.TryRemove(clientId, out _);
-            }
-        }
-
-        private async Task SendLogToClient(StreamWriter writer, RequestLog log)
-        {
-            try
-            {
-                var json = JsonSerializer.Serialize(log);
-                await writer.WriteAsync($"data: {json}\n\n");
-                await writer.FlushAsync();
-            }
             catch
             {
-                // Client might have disconnected
+                // Connection closed
             }
         }
 

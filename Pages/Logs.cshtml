@@ -198,24 +198,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+    // Initialize DOM elements
     const statusElement = document.getElementById('connectionStatus');
     const logCountElement = document.getElementById('logCount');
     const logTableBody = document.getElementById('logTableBody');
     const clearForm = document.getElementById('clearForm');
-    let logCount = 0;  // Start at 0 as we'll get initial logs from SSE
+    let logCount = parseInt(logCountElement.textContent) || 0;
 
-    // Add this at the start of your script section
-    const consoleLog = console.log;
-    console.log = function(...args) {
-        consoleLog.apply(console, args);
-        const log = document.createElement('div');
-        log.className = 'client-log';
-        log.textContent = args.map(arg => 
-            typeof arg === 'object' ? JSON.stringify(arg) : arg
-        ).join(' ');
-        document.getElementById('clientLogs').appendChild(log);
-    };
-
+    // Style helper functions
     function getMethodClass(method) {
         switch (method.toUpperCase()) {
             case 'GET': return 'bg-success text-white';
@@ -244,85 +234,86 @@
         return content;
     }
 
-    function createLogRow(log) {
-        const template = document.getElementById('logRowTemplate');
-        const row = template.content.cloneNode(true).querySelector('tr');
+    // Log rendering functions
+    function createDetailsSection(log) {
+        return `
+            <div class="card card-body m-2">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Request</h6>
+                        <div class="mb-3">
+                            <strong>Headers</strong>
+                            <div class="log-details">
+                                <pre>${Object.entries(log.headers).map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
+                            </div>
+                        </div>
+                        ${log.body ? `
+                        <div class="mb-3">
+                            <strong>Body</strong>
+                            <div class="log-details">
+                                <pre class="json-content">${formatJson(log.body)}</pre>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Response</h6>
+                        <div class="mb-3">
+                            <strong>Headers</strong>
+                            <div class="log-details">
+                                <pre>${Object.entries(log.responseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
+                            </div>
+                        </div>
+                        ${log.responseBody ? `
+                        <div class="mb-3">
+                            <strong>Body</strong>
+                            <div class="log-details">
+                                <pre class="json-content">${formatJson(log.responseBody)}</pre>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>`;
+    }
 
-        row.id = `log-${log.id}`;
-        row.classList.add('new-log');
+    function addLogToTable(log) {
+        // Create main log row
+        const logRow = document.createElement('tr');
+        logRow.id = `log-${log.id}`;
+        logRow.classList.add('new-log');
 
-        const [timestamp, id, method, path, status, duration, details] = row.cells;
-
-        timestamp.textContent = new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23);
-        id.querySelector('code').textContent = log.id;
-
-        const methodBadge = method.querySelector('.badge');
-        methodBadge.textContent = log.method;
-        methodBadge.className = `badge method-badge ${getMethodClass(log.method)}`;
-
-        path.textContent = log.path + log.queryString;
-
-        const statusBadge = status.querySelector('.badge');
-        statusBadge.textContent = log.responseStatusCode;
-        statusBadge.className = `badge ${getStatusClass(log.responseStatusCode)}`;
-
-        duration.textContent = `${log.duration.totalMilliseconds.toFixed(2)}ms`;
-
-        const detailsButton = details.querySelector('button');
-        detailsButton.setAttribute('data-bs-target', `#details-${log.id}`);
+        const timestamp = new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23);
+        logRow.innerHTML = `
+            <td class="timestamp">${timestamp}</td>
+            <td><code>${log.id}</code></td>
+            <td>
+                <span class="badge method-badge ${getMethodClass(log.method)}">${log.method}</span>
+            </td>
+            <td>${log.path}${log.queryString}</td>
+            <td>
+                <span class="badge ${getStatusClass(log.responseStatusCode)}">${log.responseStatusCode}</span>
+            </td>
+            <td>${log.duration.totalMilliseconds.toFixed(2)}ms</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" type="button" 
+                        data-bs-toggle="collapse" data-bs-target="#details-${log.id}">
+                    View Details
+                </button>
+            </td>
+        `;
 
         // Create details row
         const detailsRow = document.createElement('tr');
         detailsRow.innerHTML = `
             <td colspan="7" class="p-0">
                 <div class="collapse" id="details-${log.id}">
-                    <div class="card card-body m-2">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="mb-3">Request</h6>
-                                <div class="mb-3">
-                                    <strong>Headers</strong>
-                                    <div class="log-details">
-                                        <pre>${Object.entries(log.headers).map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
-                                    </div>
-                                </div>
-                                ${log.body ? `
-                                <div class="mb-3">
-                                    <strong>Body</strong>
-                                    <div class="log-details">
-                                        <pre class="json-content">${formatJson(log.body)}</pre>
-                                    </div>
-                                </div>
-                                ` : ''}
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="mb-3">Response</h6>
-                                <div class="mb-3">
-                                    <strong>Headers</strong>
-                                    <div class="log-details">
-                                        <pre>${Object.entries(log.responseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
-                                    </div>
-                                </div>
-                                ${log.responseBody ? `
-                                <div class="mb-3">
-                                    <strong>Body</strong>
-                                    <div class="log-details">
-                                        <pre class="json-content">${formatJson(log.responseBody)}</pre>
-                                    </div>
-                                </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    </div>
+                    ${createDetailsSection(log)}
                 </div>
             </td>
         `;
 
-        return [row, detailsRow];
-    }
-
-    function addLogToTable(log) {
-        const [logRow, detailsRow] = createLogRow(log);
+        // Add rows to table
         if (logTableBody.firstChild) {
             logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
             logTableBody.insertBefore(logRow, logTableBody.firstChild);
@@ -330,49 +321,44 @@
             logTableBody.appendChild(logRow);
             logTableBody.appendChild(detailsRow);
         }
+
+        // Update count and remove highlight after animation
         logCount++;
         logCountElement.textContent = logCount;
         setTimeout(() => logRow.classList.remove('new-log'), 2000);
     }
 
-    // Set up SSE
+    // Server-Sent Events setup
     function connectSSE() {
-        console.log('Connecting to SSE...');
+        console.log('Connecting to event stream...');
         const eventSource = new EventSource('?handler=Stream');
 
         eventSource.onopen = () => {
-            console.log('SSE Connection established');
+            console.log('Connection established');
             statusElement.textContent = 'Connected';
             statusElement.className = 'connection-status connected';
-            logTableBody.innerHTML = '';
-            logCount = 0;
         };
 
         eventSource.onmessage = (event) => {
-            console.log('Received log:', event.data.substring(0, 100) + '...');
+            console.log('Received log event');
             const log = JSON.parse(event.data);
             addLogToTable(log);
         };
 
-        eventSource.onerror = (error) => {
-            console.log('SSE Error:', error);
+        eventSource.onerror = () => {
+            console.log('Connection lost, attempting to reconnect...');
             statusElement.textContent = 'Disconnected - Reconnecting...';
             statusElement.className = 'connection-status disconnected';
-
-            setTimeout(() => {
-                console.log('Attempting to reconnect...');
-                eventSource.close();
-                connectSSE();
-            }, 3000);
+            eventSource.close();
+            setTimeout(connectSSE, 3000);
         };
 
         return eventSource;
     }
 
-    // Handle clear logs
+    // Clear logs handler
     clearForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log('Clearing logs...');
         try {
             const response = await fetch('?handler=Clear', {
                 method: 'POST',
@@ -381,7 +367,6 @@
                 }
             });
             if (response.ok) {
-                console.log('Logs cleared successfully');
                 logTableBody.innerHTML = '';
                 logCount = 0;
                 logCountElement.textContent = '0';
@@ -391,8 +376,8 @@
         }
     });
 
-    // Start SSE connection
-    let eventSource = connectSSE();
+    // Start SSE connection as soon as the page loads
+    connectSSE();
 </script>
 </body>
 </html>
