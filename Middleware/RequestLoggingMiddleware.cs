@@ -42,44 +42,49 @@ namespace KothBackend.Middleware
             var log = new RequestLog();
             var sw = Stopwatch.StartNew();
 
-            // Capture the original body stream
-            var originalBody = context.Response.Body;
-
             try
             {
-                // Create a new memory stream
-                using (var memStream = new MemoryStream())
-                {
-                    // Set the response body to the memory stream
-                    context.Response.Body = memStream;
+                // Capture request details
+                await CaptureRequest(context.Request, log);
 
-                    // Capture request details
-                    await CaptureRequest(context.Request, log);
+                var originalResponseBody = context.Response.Body;
+                using var newResponseBody = new MemoryStream();
+
+                try
+                {
+                    context.Response.Body = newResponseBody;
 
                     // Call the next middleware
                     await _next(context);
 
-                    // Capture response details
-                    memStream.Position = 0;
-                    using (var reader = new StreamReader(memStream))
+                    // Capture response body if it's text-based
+                    if (IsTextBasedContentType(context.Response.ContentType))
                     {
-                        log.ResponseBody = await reader.ReadToEndAsync();
+                        newResponseBody.Seek(0, SeekOrigin.Begin);
+                        log.ResponseBody = await new StreamReader(newResponseBody).ReadToEndAsync();
                     }
 
-                    // Copy the response to the original stream
-                    memStream.Position = 0;
-                    await memStream.CopyToAsync(originalBody);
+                    // Copy back to original stream
+                    newResponseBody.Seek(0, SeekOrigin.Begin);
+                    await newResponseBody.CopyToAsync(originalResponseBody);
                 }
+                finally
+                {
+                    context.Response.Body = originalResponseBody;
+                }
+
+                // Capture other response details
+                CaptureResponseDetails(context.Response, log);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing request/response");
+                throw;
             }
             finally
             {
-                // Always restore the original stream
-                context.Response.Body = originalBody;
-
-                // Complete the log
                 sw.Stop();
                 log.Duration = sw.Elapsed;
-                CaptureResponseDetails(context.Response, log);
                 _logService.AddLog(log);
             }
         }
@@ -100,6 +105,7 @@ namespace KothBackend.Middleware
                 try
                 {
                     request.EnableBuffering();
+
                     using var reader = new StreamReader(
                         request.Body,
                         Encoding.UTF8,
@@ -122,15 +128,10 @@ namespace KothBackend.Middleware
         {
             log.ResponseStatusCode = response.StatusCode;
 
-            foreach (var (key, value) in response.Headers)
+            foreach (var (key, value) in response.Headers.Where(h => h.Key != "Transfer-Encoding"))
             {
-                if (!log.ResponseHeaders.ContainsKey(key))
-                {
-                    log.ResponseHeaders[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
-                }
+                log.ResponseHeaders[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
             }
-
-            // Don't try to read the response body here - it's already been captured
         }
 
         private bool IsTextBasedContentType(string? contentType)
