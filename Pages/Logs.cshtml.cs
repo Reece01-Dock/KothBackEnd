@@ -20,18 +20,29 @@ namespace KothBackend.Pages
             _antiforgery = antiforgery;
         }
 
-        public void OnGet()
+        public IActionResult OnGet()
         {
+            Logs = _logService.GetLogs().Reverse(); // Get logs in reverse chronological order
             var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
             Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken!;
-            Logs = _logService.GetLogs();
+            return Page();
         }
 
         public async Task OnGetStream()
         {
-            Response.Headers["Content-Type"] = "text/event-stream";
-            Response.Headers["Cache-Control"] = "no-cache";
-            Response.Headers["Connection"] = "keep-alive";
+            var response = Response;
+            response.ContentType = "text/event-stream";
+            response.Headers["Cache-Control"] = "no-cache";
+            response.Headers["Connection"] = "keep-alive";
+
+            // Send initial logs
+            var initialLogs = _logService.GetLogs().Reverse();
+            foreach (var log in initialLogs)
+            {
+                var json = JsonSerializer.Serialize(log);
+                await response.WriteAsync($"data: {json}\n\n");
+                await response.Body.FlushAsync();
+            }
 
             var lastLogCount = _logService.GetLogs().Count();
 
@@ -46,8 +57,8 @@ namespace KothBackend.Pages
                     foreach (var log in newLogs.Reverse())
                     {
                         var json = JsonSerializer.Serialize(log);
-                        await Response.WriteAsync($"data: {json}\n\n");
-                        await Response.Body.FlushAsync();
+                        await response.WriteAsync($"data: {json}\n\n");
+                        await response.Body.FlushAsync();
                     }
                     lastLogCount = currentCount;
                 }

@@ -12,18 +12,20 @@ namespace KothBackend
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Configure Kestrel
+            builder.Services.Configure<KestrelServerOptions>(options =>
+            {
+                options.AllowSynchronousIO = true;
+                options.Limits.MinRequestBodyDataRate = null;
+                options.Limits.MinResponseDataRate = null;
+            });
+
             // Configure MongoDB
             builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDb"));
             builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 
             // Add request logging service
             builder.Services.AddSingleton<IRequestLogService, InMemoryRequestLogService>();
-
-            // Configure Kestrel to allow synchronous IO (new)
-            builder.Services.Configure<KestrelServerOptions>(options =>
-            {
-                options.AllowSynchronousIO = true;
-            });
 
             // Add Razor Pages support
             builder.Services.AddRazorPages();
