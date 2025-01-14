@@ -9,7 +9,7 @@ namespace KothBackend.Pages
     {
         private readonly IRequestLogService _logService;
 
-        public IEnumerable<RequestLog> Logs { get; private set; }
+        public IEnumerable<RequestLog> Logs { get; private set; } = new List<RequestLog>();
 
         public LogsModel(IRequestLogService logService)
         {

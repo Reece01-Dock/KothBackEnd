@@ -1,5 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http;
 using System.Text;
+using System.Diagnostics;
+using KothBackend.Models;
+using KothBackend.Services;
 
 namespace KothBackend.Middleware
 {
@@ -7,80 +10,96 @@ namespace KothBackend.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<RequestLoggingMiddleware> _logger;
+        private readonly IRequestLogService _logService;
 
-        public RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
+        public RequestLoggingMiddleware(
+            RequestDelegate next,
+            ILogger<RequestLoggingMiddleware> logger,
+            IRequestLogService logService)
         {
             _next = next;
             _logger = logger;
+            _logService = logService;
         }
 
         public async Task InvokeAsync(HttpContext context)
         {
+            var log = new RequestLog();
+            var sw = Stopwatch.StartNew();
+
             try
             {
-                // Log the request
-                await LogRequest(context.Request);
-
-                // Enable buffering for the request body so it can be read multiple times
-                context.Request.EnableBuffering();
+                // Capture request details before reading the body
+                await CaptureRequest(context.Request, log);
 
                 // Call the next middleware in the pipeline
                 await _next(context);
 
-                // Log the response
-                await LogResponse(context.Response);
+                // Capture response details
+                CaptureResponse(context.Response, log);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while processing the request");
                 throw;
             }
+            finally
+            {
+                sw.Stop();
+                log.Duration = sw.Elapsed;
+                _logService.AddLog(log);
+            }
         }
 
-        private async Task LogRequest(HttpRequest request)
+        private async Task CaptureRequest(HttpRequest request, RequestLog log)
         {
-            var message = new StringBuilder();
-            message.AppendLine("HTTP Request Information:");
-            message.AppendLine($"Schema:{request.Scheme}");
-            message.AppendLine($"Host: {request.Host}");
-            message.AppendLine($"Path: {request.Path}");
-            message.AppendLine($"QueryString: {request.QueryString}");
-            message.AppendLine($"Method: {request.Method}");
+            log.Method = request.Method;
+            log.Path = request.Path;
+            log.QueryString = request.QueryString.ToString();
 
-            // Log headers
-            message.AppendLine("Headers:");
-            foreach (var (headerKey, headerValue) in request.Headers)
+            // Capture headers
+            foreach (var (key, value) in request.Headers)
             {
-                message.AppendLine($"    {headerKey}: {headerValue}");
+                log.Headers[key] = string.Join(", ", value);
             }
 
-            // Log request body for specific content types
+            // Only try to read the body for specific content types and if it has content
             if (request.ContentLength > 0 && IsTextBasedContentType(request.ContentType))
             {
-                request.Body.Position = 0;
-                using var reader = new StreamReader(request.Body, Encoding.UTF8, leaveOpen: true);
-                var body = await reader.ReadToEndAsync();
-                message.AppendLine($"Body: {body}");
-                request.Body.Position = 0;
-            }
+                try
+                {
+                    // Create a stream reader that leaves the stream open
+                    using var reader = new StreamReader(
+                        request.Body,
+                        Encoding.UTF8,
+                        detectEncodingFromByteOrderMarks: false,
+                        bufferSize: -1,
+                        leaveOpen: true);
 
-            _logger.LogInformation(message.ToString());
+                    log.Body = await reader.ReadToEndAsync();
+
+                    // Reset the stream position if the stream supports seeking
+                    if (request.Body.CanSeek)
+                    {
+                        request.Body.Position = 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unable to read request body");
+                    log.Body = "[Error reading body]";
+                }
+            }
         }
 
-        private async Task LogResponse(HttpResponse response)
+        private void CaptureResponse(HttpResponse response, RequestLog log)
         {
-            var message = new StringBuilder();
-            message.AppendLine("HTTP Response Information:");
-            message.AppendLine($"StatusCode: {response.StatusCode}");
+            log.ResponseStatusCode = response.StatusCode;
 
-            // Log response headers
-            message.AppendLine("Headers:");
-            foreach (var (headerKey, headerValue) in response.Headers)
+            foreach (var (key, value) in response.Headers)
             {
-                message.AppendLine($"    {headerKey}: {headerValue}");
+                log.ResponseHeaders[key] = string.Join(", ", value);
             }
-
-            _logger.LogInformation(message.ToString());
         }
 
         private bool IsTextBasedContentType(string? contentType)
@@ -95,7 +114,6 @@ namespace KothBackend.Middleware
         }
     }
 
-    // Extension method to make it easier to add the middleware
     public static class RequestLoggingMiddlewareExtensions
     {
         public static IApplicationBuilder UseRequestLogging(this IApplicationBuilder builder)
