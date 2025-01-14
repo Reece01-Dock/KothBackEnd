@@ -7,6 +7,7 @@ namespace KothBackend.Services
     {
         private readonly ConcurrentQueue<RequestLog> _logs;
         private readonly int _maxLogs;
+        public event Action<RequestLog> OnLogAdded = delegate { };
 
         public InMemoryRequestLogService(int maxLogs = 1000)
         {
@@ -23,6 +24,9 @@ namespace KothBackend.Services
             {
                 _logs.TryDequeue(out _);
             }
+
+            // Notify subscribers of the new log
+            OnLogAdded(log);
         }
 
         public IEnumerable<RequestLog> GetLogs(int? limit = null)

@@ -51,6 +51,12 @@
             0% { background-color: #fff3cd; }
             100% { background-color: transparent; }
         }
+        .client-log {
+            font-family: monospace;
+            font-size: 0.9em;
+            padding: 2px 4px;
+            border-bottom: 1px solid #eee;
+        }
     </style>
 </head>
 <body>
@@ -67,6 +73,13 @@
                 <button type="submit" class="btn btn-danger">Clear Logs</button>
             </form>
             <span class="ms-3">Showing last <span id="logCount">@Model.Logs.Count()</span> entries</span>
+        </div>
+        <div class="mb-3">
+            <details>
+                <summary class="btn btn-outline-secondary btn-sm">Client Logs</summary>
+                <div id="clientLogs" class="mt-2 p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
+                </div>
+            </details>
         </div>
         <div class="table-responsive">
             <table class="table table-striped table-hover">
@@ -191,6 +204,18 @@
     const clearForm = document.getElementById('clearForm');
     let logCount = 0;  // Start at 0 as we'll get initial logs from SSE
 
+    // Add this at the start of your script section
+    const consoleLog = console.log;
+    console.log = function(...args) {
+        consoleLog.apply(console, args);
+        const log = document.createElement('div');
+        log.className = 'client-log';
+        log.textContent = args.map(arg => 
+            typeof arg === 'object' ? JSON.stringify(arg) : arg
+        ).join(' ');
+        document.getElementById('clientLogs').appendChild(log);
+    };
+
     function getMethodClass(method) {
         switch (method.toUpperCase()) {
             case 'GET': return 'bg-success text-white';
@@ -312,27 +337,30 @@
 
     // Set up SSE
     function connectSSE() {
+        console.log('Connecting to SSE...');
         const eventSource = new EventSource('?handler=Stream');
 
         eventSource.onopen = () => {
+            console.log('SSE Connection established');
             statusElement.textContent = 'Connected';
             statusElement.className = 'connection-status connected';
-            // Clear existing logs when connection is established
             logTableBody.innerHTML = '';
             logCount = 0;
         };
 
         eventSource.onmessage = (event) => {
+            console.log('Received log:', event.data.substring(0, 100) + '...');
             const log = JSON.parse(event.data);
             addLogToTable(log);
         };
 
-        eventSource.onerror = () => {
+        eventSource.onerror = (error) => {
+            console.log('SSE Error:', error);
             statusElement.textContent = 'Disconnected - Reconnecting...';
             statusElement.className = 'connection-status disconnected';
 
-            // Try to reconnect after a short delay
             setTimeout(() => {
+                console.log('Attempting to reconnect...');
                 eventSource.close();
                 connectSSE();
             }, 3000);
@@ -344,6 +372,7 @@
     // Handle clear logs
     clearForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log('Clearing logs...');
         try {
             const response = await fetch('?handler=Clear', {
                 method: 'POST',
@@ -352,6 +381,7 @@
                 }
             });
             if (response.ok) {
+                console.log('Logs cleared successfully');
                 logTableBody.innerHTML = '';
                 logCount = 0;
                 logCountElement.textContent = '0';

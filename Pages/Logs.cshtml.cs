@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Antiforgery;
-using KothBackend.Services;
-using KothBackend.Models;
 using System.Text.Json;
+using System.Collections.Concurrent;
+using KothBackend.Models;
+using KothBackend.Services;
 
 namespace KothBackend.Pages
 {
@@ -11,6 +12,7 @@ namespace KothBackend.Pages
     {
         private readonly IRequestLogService _logService;
         private readonly IAntiforgery _antiforgery;
+        private static readonly ConcurrentDictionary<string, StreamWriter> _clients = new();
 
         public IEnumerable<RequestLog> Logs { get; private set; } = new List<RequestLog>();
 
@@ -22,7 +24,7 @@ namespace KothBackend.Pages
 
         public IActionResult OnGet()
         {
-            Logs = _logService.GetLogs().Reverse(); // Get logs in reverse chronological order
+            Logs = _logService.GetLogs();
             var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
             Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken!;
             return Page();
@@ -35,35 +37,53 @@ namespace KothBackend.Pages
             response.Headers["Cache-Control"] = "no-cache";
             response.Headers["Connection"] = "keep-alive";
 
-            // Send initial logs
-            var initialLogs = _logService.GetLogs().Reverse();
-            foreach (var log in initialLogs)
+            // Generate a unique client ID
+            string clientId = Guid.NewGuid().ToString();
+
+            try
             {
-                var json = JsonSerializer.Serialize(log);
-                await response.WriteAsync($"data: {json}\n\n");
-                await response.Body.FlushAsync();
-            }
+                using var writer = new StreamWriter(response.Body);
+                _clients[clientId] = writer;
 
-            var lastLogCount = _logService.GetLogs().Count();
-
-            while (!HttpContext.RequestAborted.IsCancellationRequested)
-            {
-                var currentLogs = _logService.GetLogs();
-                var currentCount = currentLogs.Count();
-
-                if (currentCount > lastLogCount)
+                // Send initial logs
+                var initialLogs = _logService.GetLogs();
+                foreach (var log in initialLogs)
                 {
-                    var newLogs = currentLogs.Take(currentCount - lastLogCount);
-                    foreach (var log in newLogs.Reverse())
-                    {
-                        var json = JsonSerializer.Serialize(log);
-                        await response.WriteAsync($"data: {json}\n\n");
-                        await response.Body.FlushAsync();
-                    }
-                    lastLogCount = currentCount;
+                    await SendLogToClient(writer, log);
                 }
 
-                await Task.Delay(1000);
+                // Subscribe to new logs
+                _logService.OnLogAdded += async (log) =>
+                {
+                    if (_clients.TryGetValue(clientId, out var clientWriter))
+                    {
+                        await SendLogToClient(clientWriter, log);
+                    }
+                };
+
+                // Keep the connection alive
+                while (!HttpContext.RequestAborted.IsCancellationRequested)
+                {
+                    await Task.Delay(1000);
+                }
+            }
+            finally
+            {
+                _clients.TryRemove(clientId, out _);
+            }
+        }
+
+        private async Task SendLogToClient(StreamWriter writer, RequestLog log)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(log);
+                await writer.WriteAsync($"data: {json}\n\n");
+                await writer.FlushAsync();
+            }
+            catch
+            {
+                // Client might have disconnected
             }
         }
 
