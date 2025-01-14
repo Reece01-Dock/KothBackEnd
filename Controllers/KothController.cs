@@ -192,7 +192,9 @@ namespace KothBackend.Controllers
             // Validate API key
             ValidateApiKey();
 
-            return Ok(GetBonus(bohemiaUID));
+            // Get bonus code from MongoDB service
+            var bonus = await _mongoService.GetBonusCode(bohemiaUID);
+            return Ok(bonus);
         }
 
         [HttpPost("bonusCode")]
