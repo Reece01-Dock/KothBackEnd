@@ -54,7 +54,7 @@ namespace KothBackend.Middleware
                 {
                     sw.Stop();
                     log.Duration = sw.Elapsed;
-                    CaptureResponse(context.Response, log);
+                    await CaptureResponseBody(context.Response, log);
                     _logService.AddLog(log);
                 }
             }
@@ -91,6 +91,25 @@ namespace KothBackend.Middleware
                     _logger.LogWarning(ex, "Unable to read request body");
                     log.Body = "[Error reading body]";
                 }
+            }
+        }
+
+        private async Task CaptureResponseBody(HttpResponse response, RequestLog log)
+        {
+            try
+            {
+                // Create a custom response stream that captures the content
+                var captureStream = new ResponseCaptureStream(response.Body);
+                response.Body = captureStream;
+
+                // Read the response body
+                await response.CompleteAsync();
+                log.ResponseBody = captureStream.GetCapturedContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to read response body");
+                log.ResponseBody = "[Error reading body]";
             }
         }
 
