@@ -17,3 +17,7 @@ build_property.SupportLocalizedComponentNames =
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
 build_property.MSBuildProjectDirectory = C:\Users\reece\source\repos\KothBackend\KothBackend
 build_property._RazorSourceGeneratorDebug = 
+
+[C:/Users/reece/source/repos/KothBackend/KothBackend/Pages/Logs.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcTG9ncy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 

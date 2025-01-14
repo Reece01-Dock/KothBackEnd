@@ -44,3 +44,5 @@ C:\Users\reece\source\repos\KothBackend\KothBackend\obj\Debug\net8.0\KothBackend
 C:\Users\reece\source\repos\KothBackend\KothBackend\obj\Debug\net8.0\KothBackend.genruntimeconfig.cache
 C:\Users\reece\source\repos\KothBackend\KothBackend\obj\Debug\net8.0\ref\KothBackend.dll
 C:\Users\reece\source\repos\KothBackend\KothBackend\obj\Debug\net8.0\KothBackend.sourcelink.json
+C:\Users\reece\source\repos\KothBackend\KothBackend\obj\Debug\net8.0\KothBackend.RazorAssemblyInfo.cache
+C:\Users\reece\source\repos\KothBackend\KothBackend\obj\Debug\net8.0\KothBackend.RazorAssemblyInfo.cs

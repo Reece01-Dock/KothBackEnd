@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KothBackend")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+038a985520a434b378742a7b44f55c9f93ad1931")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3ba05bcf5d00486108e18f5a3b4064ecc4ea7ea7")]
 [assembly: System.Reflection.AssemblyProductAttribute("KothBackend")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KothBackend")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
