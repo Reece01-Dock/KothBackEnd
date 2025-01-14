@@ -31,13 +31,23 @@
         .json-content {
             font-family: monospace;
         }
+        #autoRefreshStatus {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
     <div class="container-fluid py-3">
-        <h1>Request Logs</h1>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1>Request Logs</h1>
+            <div>
+                <button id="toggleRefresh" class="btn btn-outline-primary me-2">Auto-refresh: ON</button>
+                <span id="autoRefreshStatus">Next refresh in 5s</span>
+            </div>
+        </div>
         <div class="mb-3">
-            <form method="post" asp-page-handler="Clear" class="d-inline">
+            <form id="clearForm" method="post" asp-page-handler="Clear" class="d-inline">
                 <button type="submit" class="btn btn-danger">Clear Logs</button>
             </form>
             <span class="ms-3">Showing last @Model.Logs.Count() entries</span>
@@ -138,6 +148,57 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let autoRefreshEnabled = true;
+        let countdown = 5;
+        const toggleBtn = document.getElementById('toggleRefresh');
+        const statusSpan = document.getElementById('autoRefreshStatus');
+        const clearForm = document.getElementById('clearForm');
+
+        function updateCountdown() {
+            if (autoRefreshEnabled) {
+                statusSpan.textContent = `Next refresh in ${countdown}s`;
+                countdown--;
+                if (countdown < 0) {
+                    countdown = 5;
+                    window.location.reload();
+                }
+            }
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            toggleBtn.textContent = `Auto-refresh: ${autoRefreshEnabled ? 'ON' : 'OFF'}`;
+            toggleBtn.classList.toggle('btn-outline-primary');
+            toggleBtn.classList.toggle('btn-outline-secondary');
+            if (autoRefreshEnabled) {
+                countdown = 5;
+                statusSpan.textContent = `Next refresh in ${countdown}s`;
+            } else {
+                statusSpan.textContent = 'Auto-refresh disabled';
+            }
+        });
+
+        // Handle clear logs with AJAX
+        clearForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch('?handler=Clear', {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                    }
+                });
+                if (response.ok) {
+                    window.location.reload();
+                }
+            } catch (error) {
+                console.error('Error clearing logs:', error);
+            }
+        });
+
+        setInterval(updateCountdown, 1000);
+    </script>
 </body>
 </html>
 
@@ -170,10 +231,8 @@
     {
         try
         {
-            // Check if the content looks like JSON
             if (content.StartsWith("{") || content.StartsWith("["))
             {
-                // Try to parse and format as JSON
                 var obj = System.Text.Json.JsonSerializer.Deserialize<object>(content);
                 return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions
                     {
