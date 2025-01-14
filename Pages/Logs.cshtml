@@ -491,9 +491,9 @@
             {
                 var obj = System.Text.Json.JsonSerializer.Deserialize<object>(content);
                 return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions
-                    {
-                        WriteIndented = true
-                    });
+                {
+                    WriteIndented = true
+                });
             }
         }
         catch
