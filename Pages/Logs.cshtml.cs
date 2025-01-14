@@ -23,22 +23,15 @@ namespace KothBackend.Pages
         public void OnGet()
         {
             var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
-            Response.Headers.Add("X-CSRF-TOKEN", tokens.RequestToken);
+            Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken!;
             Logs = _logService.GetLogs();
-        }
-
-        public IActionResult OnPostClear()
-        {
-            _logService.ClearLogs();
-            return RedirectToPage();
         }
 
         public async Task OnGetStream()
         {
-            var response = Response;
-            response.Headers.Add("Content-Type", "text/event-stream");
-            response.Headers.Add("Cache-Control", "no-cache");
-            response.Headers.Add("Connection", "keep-alive");
+            Response.Headers["Content-Type"] = "text/event-stream";
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["Connection"] = "keep-alive";
 
             var lastLogCount = _logService.GetLogs().Count();
 
@@ -50,17 +43,23 @@ namespace KothBackend.Pages
                 if (currentCount > lastLogCount)
                 {
                     var newLogs = currentLogs.Take(currentCount - lastLogCount);
-                    foreach (var log in newLogs)
+                    foreach (var log in newLogs.Reverse())
                     {
                         var json = JsonSerializer.Serialize(log);
-                        await response.WriteAsync($"data: {json}\n\n");
-                        await response.Body.FlushAsync();
+                        await Response.WriteAsync($"data: {json}\n\n");
+                        await Response.Body.FlushAsync();
                     }
                     lastLogCount = currentCount;
                 }
 
-                await Task.Delay(1000); // Check for new logs every second
+                await Task.Delay(1000);
             }
+        }
+
+        public IActionResult OnPostClear()
+        {
+            _logService.ClearLogs();
+            return RedirectToPage();
         }
     }
 }

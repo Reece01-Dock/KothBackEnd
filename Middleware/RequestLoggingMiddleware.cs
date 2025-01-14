@@ -36,6 +36,8 @@ namespace KothBackend.Middleware
                 context.Request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
 
             RequestLog? log = null;
+            var sw = Stopwatch.StartNew();
+
             if (shouldLog)
             {
                 log = new RequestLog();
@@ -50,6 +52,8 @@ namespace KothBackend.Middleware
             {
                 if (shouldLog && log != null)
                 {
+                    sw.Stop();
+                    log.Duration = sw.Elapsed;
                     CaptureResponse(context.Response, log);
                     _logService.AddLog(log);
                 }
@@ -64,7 +68,7 @@ namespace KothBackend.Middleware
 
             foreach (var (key, value) in request.Headers)
             {
-                log.Headers[key] = string.Join(", ", value);
+                log.Headers[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
             }
 
             if (request.ContentLength > 0 && IsTextBasedContentType(request.ContentType))
@@ -96,10 +100,8 @@ namespace KothBackend.Middleware
 
             foreach (var (key, value) in response.Headers)
             {
-                log.ResponseHeaders[key] = string.Join(", ", value);
+                log.ResponseHeaders[key] = string.Join(", ", value.Select(v => v ?? string.Empty));
             }
-
-            // Note: We're not capturing response body for now as it requires more complex stream handling
         }
 
         private bool IsTextBasedContentType(string? contentType)
