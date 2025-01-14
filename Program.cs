@@ -15,10 +15,10 @@ namespace KothBackend
             builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDb"));
             builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 
-            // Add request logging service
+            // Add request logging service (new)
             builder.Services.AddSingleton<IRequestLogService, InMemoryRequestLogService>();
 
-            // Add Razor Pages support
+            // Add Razor Pages support (new)
             builder.Services.AddRazorPages();
 
             builder.Services.AddControllers()
@@ -33,7 +33,10 @@ namespace KothBackend
 
             var app = builder.Build();
 
-            // Add the request logging middleware
+            // Enable static files (new)
+            app.UseStaticFiles();
+
+            // Add the request logging middleware (new)
             app.UseRequestLogging();
 
             if (app.Environment.IsDevelopment())
@@ -42,14 +45,13 @@ namespace KothBackend
                 app.UseSwaggerUI();
             }
 
-            // Add static files and routing middleware
-            app.UseStaticFiles();
+            // Add routing middleware (new)
             app.UseRouting();
 
             app.UseWebSockets();
             app.UseAuthorization();
 
-            // Map both controllers and Razor Pages
+            // Map both controllers and Razor Pages (updated)
             app.MapControllers();
             app.MapRazorPages();
 
