@@ -2,6 +2,7 @@
 using KothBackend.Services;
 using KothBackend.Models;
 using System.Text.Json;
+using System.Xml.Linq;
 
 namespace KothBackend.Controllers
 {
@@ -64,21 +65,12 @@ namespace KothBackend.Controllers
 
             try
             {
-                // Log the JSON part
-                Console.WriteLine($"JSON content: {parts[1]}");
-
                 var newProfile = JsonSerializer.Deserialize<PlayerProfile>(parts[1]);
                 if (newProfile == null)
                 {
                     Console.WriteLine("Failed to deserialize profile");
                     return BadRequest("Invalid JSON format");
                 }
-
-                // Log the deserialized profile
-                Console.WriteLine($"Deserialized profile - UID: {newProfile.m_playerUID}");
-                Console.WriteLine($"Player Name: {newProfile.m_playerName}");
-                Console.WriteLine($"Level: {newProfile.m_level}, XP: {newProfile.m_xp}, Money: {newProfile.m_money}");
-                Console.WriteLine($"Kills: {newProfile.m_kills}, Deaths: {newProfile.m_deaths}");
 
                 await _mongoService.UpdateProfile(newProfile);
                 return Ok(new { status = "success", message = "Profile updated" });
@@ -200,51 +192,15 @@ namespace KothBackend.Controllers
             // Validate API key
             ValidateApiKey();
 
-            // Ensure the bohemiaUID parameter is provided
-            if (string.IsNullOrWhiteSpace(bohemiaUID))
-                return BadRequest(new BonusCodeResponse
-                {
-                    error = true,
-                    errorReason = "bohemiaUID is required"
-                });
-
-            try
+            return Ok(new BonusCode
             {
-                // Fetch the bonus code for the player
-                var bonusCode = await _mongoService.GetBonusCode(bohemiaUID);
-
-                if (bonusCode == null)
-                {
-                    // No valid bonus code available
-                    return Ok(new BonusCodeResponse
-                    {
-                        error = true,
-                        errorReason = "No bonus code found"
-                    });
-                }
-
-                // Return the bonus code details
-                return Ok(new BonusCodeResponse
-                {
-                    name = bonusCode.name,
-                    code = bonusCode.code,
-                    playerUID = bohemiaUID,
-                    multiplier = bonusCode.multiplier,
-                    dateEnd = bonusCode.dateEnd,
-                    error = false,
-                    errorReason = string.Empty
-                });
-            }
-            catch (Exception ex)
-            {
-                // Log the exception and return an error response
-                Console.WriteLine($"Error fetching bonus code for UID {bohemiaUID}: {ex.Message}");
-                return StatusCode(500, new BonusCodeResponse
-                {
-                    error = true,
-                    errorReason = "An error occurred while fetching the bonus code"
-                });
-            }
+                Code = "Test",
+                Name = "Test",
+                PlayerUID = bohemiaUID,
+                Multiplier = "2",
+                DateEnd = (DateTime.Now + TimeSpan.FromDays(1)).ToString(),
+                IsUsed = true
+            });
         }
 
         [HttpPost("bonusCode")]

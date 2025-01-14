@@ -1,5 +1,6 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using System.Text.Json.Serialization;
 
 namespace KothBackend.Models
 {
@@ -13,6 +14,8 @@ namespace KothBackend.Models
         public string? Multiplier { get; set; }
         public string? DateEnd { get; set; }
         public bool IsUsed { get; set; }
+
+        [JsonIgnore]
         public HashSet<string> UsedByPlayers { get; set; } = new HashSet<string>();
     }
 }
