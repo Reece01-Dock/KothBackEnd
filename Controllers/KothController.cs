@@ -192,15 +192,7 @@ namespace KothBackend.Controllers
             // Validate API key
             ValidateApiKey();
 
-            return Ok(new BonusCode
-            {
-                Code = "Test",
-                Name = "Test",
-                PlayerUID = bohemiaUID,
-                Multiplier = "2",
-                DateEnd = (DateTime.Now + TimeSpan.FromDays(1)).ToString(),
-                IsUsed = true
-            });
+            return Ok(GetBonus(bohemiaUID));
         }
 
         [HttpPost("bonusCode")]

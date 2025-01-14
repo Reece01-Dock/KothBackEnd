@@ -110,69 +110,46 @@ namespace KothBackend.Services
             await _bans.InsertOneAsync(new BsonDocument("playerUID", playerUID));
         }
 
-        public async Task<BonusCodeResponse> GetBonusCode(string playerUID)
+        public async Task<BonusCode?> GetBonusCode(string playerUID)
         {
+            // Find the first valid bonus code that hasn't been used by the player
             var bonusCode = await _bonusCodes
                 .Find(b => !b.UsedByPlayers.Contains(playerUID) && DateTime.Parse(b.DateEnd) > DateTime.UtcNow)
                 .FirstOrDefaultAsync();
 
+            // If no valid bonus code is found, return null
             if (bonusCode == null)
             {
-                return new BonusCodeResponse
-                {
-                    error = true,
-                    errorReason = "No bonus code found"
-                };
+                return null;
             }
 
-            return new BonusCodeResponse
-            {
-                name = bonusCode.Name,
-                code = bonusCode.Code,
-                playerUID = playerUID,
-                multiplier = bonusCode.Multiplier,
-                dateEnd = bonusCode.DateEnd,
-                error = false
-            };
+            return bonusCode;
         }
 
-        public async Task<BonusCodeResponse> UseBonusCode(string code, string playerUID)
+        public async Task<BonusCode?> UseBonusCode(string code, string playerUID)
         {
+            // Find the bonus code by code and ensure it's not expired
             var bonusCode = await _bonusCodes
                 .Find(b => b.Code == code && DateTime.Parse(b.DateEnd) > DateTime.UtcNow)
                 .FirstOrDefaultAsync();
 
+            // If the bonus code is invalid or expired, return null
             if (bonusCode == null)
             {
-                return new BonusCodeResponse
-                {
-                    error = true,
-                    errorReason = "Invalid or expired bonus code"
-                };
+                return null;
             }
 
+            // Check if the player has already used this bonus code
             if (bonusCode.UsedByPlayers.Contains(playerUID))
             {
-                return new BonusCodeResponse
-                {
-                    error = true,
-                    errorReason = "You have already used this bonus code"
-                };
+                return null; // Alternatively, you could throw an exception or handle this differently
             }
 
-            // Add player to used list
-            var update = Builders<BonusCode>.Update.AddToSet(b => b.UsedByPlayers, playerUID);
-            await _bonusCodes.UpdateOneAsync(b => b.Code == code, update);
+            // Add the player to the UsedByPlayers list
+            bonusCode.UsedByPlayers.Add(playerUID);
+            await _bonusCodes.ReplaceOneAsync(b => b.Code == code, bonusCode);
 
-            return new BonusCodeResponse
-            {
-                name = bonusCode.Name,
-                code = bonusCode.Code,
-                playerUID = playerUID,
-                multiplier = bonusCode.Multiplier,
-                dateEnd = bonusCode.DateEnd,
-                error = false
-            };
+            return bonusCode;
         }
 
         public async Task CreateBonusCode(string code, string name, string multiplier, int validDays)
