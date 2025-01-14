@@ -16,9 +16,7 @@ namespace KothBackend.Middleware
         private readonly HashSet<string> _excludedPaths = new()
         {
             "/logs",              // Main logs page
-            "/favicon.ico",       // Browser favicon requests
-            "/css",              // Static CSS files
-            "/js"                // Static JS files
+            "/favicon.ico"        // Browser favicon requests
         };
 
         public RequestLoggingMiddleware(
@@ -37,47 +35,22 @@ namespace KothBackend.Middleware
             bool shouldLog = !_excludedPaths.Any(path =>
                 context.Request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
 
-            var log = shouldLog ? new RequestLog() : null;
-            var sw = shouldLog ? Stopwatch.StartNew() : null;
+            RequestLog? log = null;
+            if (shouldLog)
+            {
+                log = new RequestLog();
+                await CaptureRequest(context.Request, log);
+            }
 
             try
             {
-                if (shouldLog)
-                {
-                    await CaptureRequest(context.Request, log!);
-                }
-
-                // Create response capture stream if needed
-                Stream originalBody = context.Response.Body;
-                ResponseCaptureStream? responseStream = null;
-
-                if (shouldLog)
-                {
-                    responseStream = new ResponseCaptureStream(originalBody);
-                    context.Response.Body = responseStream;
-                }
-
-                // Call the next middleware in the pipeline
                 await _next(context);
-
-                // Capture response if needed
-                if (shouldLog && responseStream != null)
-                {
-                    CaptureResponse(context.Response, responseStream, log!);
-                    context.Response.Body = originalBody;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred while processing the request");
-                throw;
             }
             finally
             {
-                if (shouldLog && sw != null && log != null)
+                if (shouldLog && log != null)
                 {
-                    sw.Stop();
-                    log.Duration = sw.Elapsed;
+                    CaptureResponse(context.Response, log);
                     _logService.AddLog(log);
                 }
             }
@@ -89,19 +62,16 @@ namespace KothBackend.Middleware
             log.Path = request.Path;
             log.QueryString = request.QueryString.ToString();
 
-            // Capture headers
             foreach (var (key, value) in request.Headers)
             {
                 log.Headers[key] = string.Join(", ", value);
             }
 
-            // Only try to read the body for specific content types and if it has content
             if (request.ContentLength > 0 && IsTextBasedContentType(request.ContentType))
             {
                 try
                 {
                     request.EnableBuffering();
-
                     using var reader = new StreamReader(
                         request.Body,
                         Encoding.UTF8,
@@ -120,7 +90,7 @@ namespace KothBackend.Middleware
             }
         }
 
-        private void CaptureResponse(HttpResponse response, ResponseCaptureStream responseStream, RequestLog log)
+        private void CaptureResponse(HttpResponse response, RequestLog log)
         {
             log.ResponseStatusCode = response.StatusCode;
 
@@ -129,19 +99,7 @@ namespace KothBackend.Middleware
                 log.ResponseHeaders[key] = string.Join(", ", value);
             }
 
-            // Capture response body if it's a text-based content type
-            if (IsTextBasedContentType(response.ContentType))
-            {
-                try
-                {
-                    log.ResponseBody = responseStream.GetCapturedContent();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Unable to read response body");
-                    log.ResponseBody = "[Error reading response body]";
-                }
-            }
+            // Note: We're not capturing response body for now as it requires more complex stream handling
         }
 
         private bool IsTextBasedContentType(string? contentType)
