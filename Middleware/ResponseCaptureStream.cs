@@ -17,7 +17,7 @@ namespace KothBackend.Middleware
         {
             _captureStream.Position = 0;
             using var reader = new StreamReader(_captureStream, Encoding.UTF8);
-            return reader.ReadToEnd();
+            return reader.ReadToEndAsync().Result;
         }
 
         public override bool CanRead => true;
@@ -30,10 +30,15 @@ namespace KothBackend.Middleware
             set => _captureStream.Position = value;
         }
 
+        public override async Task FlushAsync(CancellationToken cancellationToken)
+        {
+            await _originalBody.FlushAsync(cancellationToken);
+            await _captureStream.FlushAsync(cancellationToken);
+        }
+
         public override void Flush()
         {
-            _originalBody.Flush();
-            _captureStream.Flush();
+            FlushAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -53,8 +58,7 @@ namespace KothBackend.Middleware
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            _originalBody.Write(buffer, offset, count);
-            _captureStream.Write(buffer, offset, count);
+            WriteAsync(buffer, offset, count).GetAwaiter().GetResult();
         }
 
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)

@@ -2,6 +2,7 @@ using KothBackend.Configuration;
 using KothBackend.Services;
 using KothBackend.Middleware;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace KothBackend
 {
@@ -15,10 +16,16 @@ namespace KothBackend
             builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDb"));
             builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 
-            // Add request logging service (new)
+            // Add request logging service
             builder.Services.AddSingleton<IRequestLogService, InMemoryRequestLogService>();
 
-            // Add Razor Pages support (new)
+            // Configure Kestrel to allow synchronous IO (new)
+            builder.Services.Configure<KestrelServerOptions>(options =>
+            {
+                options.AllowSynchronousIO = true;
+            });
+
+            // Add Razor Pages support
             builder.Services.AddRazorPages();
 
             builder.Services.AddControllers()
@@ -33,10 +40,10 @@ namespace KothBackend
 
             var app = builder.Build();
 
-            // Enable static files (new)
+            // Enable static files
             app.UseStaticFiles();
 
-            // Add the request logging middleware (new)
+            // Add the request logging middleware
             app.UseRequestLogging();
 
             if (app.Environment.IsDevelopment())
@@ -45,13 +52,11 @@ namespace KothBackend
                 app.UseSwaggerUI();
             }
 
-            // Add routing middleware (new)
             app.UseRouting();
-
             app.UseWebSockets();
             app.UseAuthorization();
 
-            // Map both controllers and Razor Pages (updated)
+            // Map both controllers and Razor Pages
             app.MapControllers();
             app.MapRazorPages();
 
