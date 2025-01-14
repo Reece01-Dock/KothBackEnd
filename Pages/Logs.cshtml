@@ -293,108 +293,108 @@
         }
 
         function addLogToTable(log) {
-        try {
-            console.log('Received log:', log); // Debug logging
-
-            if (!log) {
-                console.error('Received undefined log');
-                return;
-            }
-
-            // Create main log row
-            const logRow = document.createElement('tr');
-            logRow.id = `log-${log.Id || 'unknown'}`; // Changed from log.id to log.Id
-            logRow.classList.add('new-log');
-
-            // Format the timestamp safely
-            let timestamp;
             try {
-                timestamp = log.Timestamp ? new Date(log.Timestamp).toISOString().replace('T', ' ').substr(0, 23) : 'Invalid Date'; // Changed from log.timestamp to log.Timestamp
-            } catch (e) {
-                timestamp = 'Invalid Date';
-                console.error('Error parsing timestamp:', e);
-            }
+                console.log('Received log:', log);
 
-            logRow.innerHTML = `
-                <td class="timestamp">${timestamp}</td>
-                <td><code>${log.Id || 'unknown'}</code></td>
-                <td>
-                    <span class="badge method-badge ${getMethodClass(log.Method)}">${log.Method || 'UNKNOWN'}</span>
-                </td>
-                <td>${log.Path || ''}${log.QueryString || ''}</td>
-                <td>
-                    <span class="badge ${getStatusClass(log.ResponseStatusCode || 0)}">${log.ResponseStatusCode || 'N/A'}</span>
-                </td>
-                <td>${log.Duration ? parseFloat(log.Duration.match(/[\d.]+/)[0]).toFixed(2) : '0.00'}ms</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" type="button" 
-                            data-bs-toggle="collapse" data-bs-target="#details-${log.Id || 'unknown'}">
-                        View Details
-                    </button>
-                </td>
-            `;
+                if (!log) {
+                    console.error('Received undefined log');
+                    return;
+                }
 
-            const detailsRow = document.createElement('tr');
-            detailsRow.innerHTML = `
-                <td colspan="7" class="p-0">
-                    <div class="collapse" id="details-${log.Id || 'unknown'}">
-                        <div class="card card-body m-2">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6 class="mb-3">Request</h6>
-                                    <div class="mb-3">
-                                        <strong>Headers</strong>
-                                        <div class="log-details">
-                                            <pre>${log.Headers ? Object.entries(log.Headers).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
+                // Create main log row
+                const logRow = document.createElement('tr');
+                logRow.id = `log-${log.Id || 'unknown'}`;
+                logRow.classList.add('new-log');
+
+                // Format the timestamp safely
+                let timestamp;
+                try {
+                    timestamp = log.Timestamp ? new Date(log.Timestamp).toISOString().replace('T', ' ').substr(0, 23) : 'Invalid Date';
+                } catch (e) {
+                    timestamp = 'Invalid Date';
+                    console.error('Error parsing timestamp:', e);
+                }
+
+                logRow.innerHTML = `
+                    <td class="timestamp">${timestamp}</td>
+                    <td><code>${log.Id || 'unknown'}</code></td>
+                    <td>
+                        <span class="badge method-badge ${getMethodClass(log.Method)}">${log.Method || 'UNKNOWN'}</span>
+                    </td>
+                    <td>${log.Path || ''}${log.QueryString || ''}</td>
+                    <td>
+                        <span class="badge ${getStatusClass(log.ResponseStatusCode || 0)}">${log.ResponseStatusCode || 'N/A'}</span>
+                    </td>
+                    <td>${log.Duration ? parseFloat(log.Duration.match(/[\d.]+/)[0]).toFixed(2) : '0.00'}ms</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#details-${log.Id || 'unknown'}">
+                            View Details
+                        </button>
+                    </td>
+                `;
+
+                const detailsRow = document.createElement('tr');
+                detailsRow.innerHTML = `
+                    <td colspan="7" class="p-0">
+                        <div class="collapse" id="details-${log.Id || 'unknown'}">
+                            <div class="card card-body m-2">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-3">Request</h6>
+                                        <div class="mb-3">
+                                            <strong>Headers</strong>
+                                            <div class="log-details">
+                                                <pre>${log.Headers ? Object.entries(log.Headers).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
+                                            </div>
                                         </div>
-                                    </div>
-                                    ${log.Body ? `
-                                    <div class="mb-3">
-                                        <strong>Body</strong>
-                                        <div class="log-details">
-                                            <pre class="json-content">${formatJson(log.Body)}</pre>
+                                        ${log.Body ? `
+                                        <div class="mb-3">
+                                            <strong>Body</strong>
+                                            <div class="log-details">
+                                                <pre class="json-content">${formatJson(log.Body)}</pre>
+                                            </div>
                                         </div>
+                                        ` : ''}
                                     </div>
-                                    ` : ''}
-                                </div>
-                                <div class="col-md-6">
-                                    <h6 class="mb-3">Response</h6>
-                                    <div class="mb-3">
-                                        <strong>Headers</strong>
-                                        <div class="log-details">
-                                            <pre>${log.ResponseHeaders ? Object.entries(log.ResponseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
+                                    <div class="col-md-6">
+                                        <h6 class="mb-3">Response</h6>
+                                        <div class="mb-3">
+                                            <strong>Headers</strong>
+                                            <div class="log-details">
+                                                <pre>${log.ResponseHeaders ? Object.entries(log.ResponseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
+                                            </div>
                                         </div>
-                                    </div>
-                                    ${log.ResponseBody ? `
-                                    <div class="mb-3">
-                                        <strong>Body</strong>
-                                        <div class="log-details">
-                                            <pre class="json-content">${formatJson(log.ResponseBody)}</pre>
+                                        ${log.ResponseBody ? `
+                                        <div class="mb-3">
+                                            <strong>Full Response Body</strong>
+                                            <div class="log-details">
+                                                <pre class="json-content">${formatJson(log.ResponseBody)}</pre>
+                                            </div>
                                         </div>
+                                        ` : ''}
                                     </div>
-                                    ` : ''}
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </td>
-            `;
+                    </td>
+                `;
 
-            if (logTableBody.firstChild) {
-                logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
-                logTableBody.insertBefore(logRow, logTableBody.firstChild);
-            } else {
-                logTableBody.appendChild(logRow);
-                logTableBody.appendChild(detailsRow);
+                if (logTableBody.firstChild) {
+                    logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
+                    logTableBody.insertBefore(logRow, logTableBody.firstChild);
+                } else {
+                    logTableBody.appendChild(logRow);
+                    logTableBody.appendChild(detailsRow);
+                }
+
+                logCount++;
+                logCountElement.textContent = logCount;
+                setTimeout(() => logRow.classList.remove('new-log'), 2000);
+            } catch (error) {
+                console.error('Error adding log to table:', error, 'Log data:', log);
             }
-
-            logCount++;
-            logCountElement.textContent = logCount;
-            setTimeout(() => logRow.classList.remove('new-log'), 2000);
-        } catch (error) {
-            console.error('Error adding log to table:', error, 'Log data:', log);
         }
-    }
 
         // Server-Sent Events setup
         function connectSSE() {
