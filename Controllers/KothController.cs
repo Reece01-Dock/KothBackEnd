@@ -197,22 +197,23 @@ namespace KothBackend.Controllers
             return Ok(bonus);
         }
 
-        [HttpPost("bonusCode")]
-        public async Task<ActionResult<BonusCode>> UseBonus([FromBody] BonusCodeRequest request)
+        [HttpPost("bonusCode")]  // Match the URL in the screenshot
+        [Consumes("application/x-www-form-urlencoded")]  // Explicitly specify content type
+        public async Task<ActionResult<BonusCode>> UseBonus([FromForm] string code, [FromForm] string playerUID)
         {
             try
             {
                 // Validate API key
                 ValidateApiKey();
 
-                // Use the bonus code - this already handles all the logic we need
-                var bonusCode = await _mongoService.UseBonusCode(request.Code, request.PlayerUID);
+                var bonusCode = await _mongoService.UseBonusCode(code, playerUID);
 
                 if (bonusCode == null)
                 {
                     return NotFound(new { message = "Invalid or expired bonus code, or code already used by player" });
                 }
 
+                // Return JSON response
                 return Ok(bonusCode);
             }
             catch (Exception ex)
