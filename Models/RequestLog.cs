@@ -11,6 +11,7 @@
         public string? Body { get; set; }
         public int ResponseStatusCode { get; set; }
         public Dictionary<string, string> ResponseHeaders { get; set; }
+        public string? ResponseBody { get; set; }  // Added this property
         public TimeSpan Duration { get; set; }
 
         public RequestLog()

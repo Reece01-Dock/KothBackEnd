@@ -13,12 +13,23 @@
         .log-details {
             max-height: 200px;
             overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
         }
         .timestamp {
             white-space: nowrap;
         }
         .method-badge {
             width: 80px;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .json-content {
+            font-family: monospace;
         }
     </style>
 </head>
@@ -75,17 +86,47 @@
                                 <td colspan="7" class="p-0">
                                     <div class="collapse" id="details-@log.Id">
                                         <div class="card card-body m-2">
-                                            <h6>Request Headers</h6>
-                                            <pre class="log-details">@GetHeadersString(log.Headers)</pre>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="mb-3">Request</h6>
+                                                    <div class="mb-3">
+                                                        <strong>Headers</strong>
+                                                        <div class="log-details">
+                                                            <pre>@GetHeadersString(log.Headers)</pre>
+                                                        </div>
+                                                    </div>
 
-                                        @if (!string.IsNullOrEmpty(log.Body))
-                                        {
-                                                    <h6>Request Body</h6>
-                                                    <pre class="log-details">@log.Body</pre>
-                                        }
+                                                @if (!string.IsNullOrEmpty(log.Body))
+                                                {
+                                                            <div class="mb-3">
+                                                                <strong>Body</strong>
+                                                                <div class="log-details">
+                                                                    <pre class="json-content">@FormatJson(log.Body)</pre>
+                                                                </div>
+                                                            </div>
+                                                }
+                                                </div>
 
-                                            <h6>Response Headers</h6>
-                                            <pre class="log-details">@GetHeadersString(log.ResponseHeaders)</pre>
+                                                <div class="col-md-6">
+                                                    <h6 class="mb-3">Response</h6>
+                                                    <div class="mb-3">
+                                                        <strong>Headers</strong>
+                                                        <div class="log-details">
+                                                            <pre>@GetHeadersString(log.ResponseHeaders)</pre>
+                                                        </div>
+                                                    </div>
+
+                                                @if (!string.IsNullOrEmpty(log.ResponseBody))
+                                                {
+                                                            <div class="mb-3">
+                                                                <strong>Body</strong>
+                                                                <div class="log-details">
+                                                                    <pre class="json-content">@FormatJson(log.ResponseBody)</pre>
+                                                                </div>
+                                                            </div>
+                                                }
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -123,5 +164,27 @@
     private string GetHeadersString(Dictionary<string, string> headers)
     {
         return string.Join("\n", headers.Select(h => $"{h.Key}: {h.Value}"));
+    }
+
+    private string FormatJson(string content)
+    {
+        try
+        {
+            // Check if the content looks like JSON
+            if (content.StartsWith("{") || content.StartsWith("["))
+            {
+                // Try to parse and format as JSON
+                var obj = System.Text.Json.JsonSerializer.Deserialize<object>(content);
+                return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
+            }
+        }
+        catch
+        {
+            // If it's not valid JSON, return the content as-is
+        }
+        return content;
     }
 }

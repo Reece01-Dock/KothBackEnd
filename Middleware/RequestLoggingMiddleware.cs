@@ -29,14 +29,19 @@ namespace KothBackend.Middleware
 
             try
             {
-                // Capture request details before reading the body
+                // Capture request details
                 await CaptureRequest(context.Request, log);
+
+                // Capture the response body
+                var originalBodyStream = context.Response.Body;
+                using var responseBodyStream = new ResponseCaptureStream(originalBodyStream);
+                context.Response.Body = responseBodyStream;
 
                 // Call the next middleware in the pipeline
                 await _next(context);
 
-                // Capture response details
-                CaptureResponse(context.Response, log);
+                // Capture response details including body
+                CaptureResponse(context.Response, responseBodyStream, log);
             }
             catch (Exception ex)
             {
@@ -68,7 +73,9 @@ namespace KothBackend.Middleware
             {
                 try
                 {
-                    // Create a stream reader that leaves the stream open
+                    // Enable buffering for the request body
+                    request.EnableBuffering();
+
                     using var reader = new StreamReader(
                         request.Body,
                         Encoding.UTF8,
@@ -77,12 +84,7 @@ namespace KothBackend.Middleware
                         leaveOpen: true);
 
                     log.Body = await reader.ReadToEndAsync();
-
-                    // Reset the stream position if the stream supports seeking
-                    if (request.Body.CanSeek)
-                    {
-                        request.Body.Position = 0;
-                    }
+                    request.Body.Position = 0;
                 }
                 catch (Exception ex)
                 {
@@ -92,13 +94,27 @@ namespace KothBackend.Middleware
             }
         }
 
-        private void CaptureResponse(HttpResponse response, RequestLog log)
+        private void CaptureResponse(HttpResponse response, ResponseCaptureStream responseStream, RequestLog log)
         {
             log.ResponseStatusCode = response.StatusCode;
 
             foreach (var (key, value) in response.Headers)
             {
                 log.ResponseHeaders[key] = string.Join(", ", value);
+            }
+
+            // Capture response body if it's a text-based content type
+            if (IsTextBasedContentType(response.ContentType))
+            {
+                try
+                {
+                    log.ResponseBody = responseStream.GetCapturedContent();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unable to read response body");
+                    log.ResponseBody = "[Error reading response body]";
+                }
             }
         }
 
