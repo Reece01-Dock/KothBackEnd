@@ -198,251 +198,226 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-    // Initialize DOM elements
-    const statusElement = document.getElementById('connectionStatus');
-    const logCountElement = document.getElementById('logCount');
-    const logTableBody = document.getElementById('logTableBody');
-    const clearForm = document.getElementById('clearForm');
-    let logCount = parseInt(logCountElement.textContent) || 0;
+        // Initialize DOM elements
+        const statusElement = document.getElementById('connectionStatus');
+        const logCountElement = document.getElementById('logCount');
+        const logTableBody = document.getElementById('logTableBody');
+        const clearForm = document.getElementById('clearForm');
+        let logCount = parseInt(logCountElement.textContent) || 0;
 
-    const consoleLog = console.log;
-    console.log = function(...args) {
-        consoleLog.apply(console, args);
-        const log = document.createElement('div');
-        log.className = 'client-log';
-        log.textContent = args.map(arg => 
-            typeof arg === 'object' ? JSON.stringify(arg) : arg
-        ).join(' ');
-        document.getElementById('clientLogs').appendChild(log);
-    };
-
-    // Style helper functions
-    function getMethodClass(method) {
-        if (!method) return 'bg-secondary text-white';
-
-        switch (method.toUpperCase()) {
-            case 'GET': return 'bg-success text-white';
-            case 'POST': return 'bg-primary text-white';
-            case 'PUT': return 'bg-warning text-dark';
-            case 'DELETE': return 'bg-danger text-white';
-            case 'PATCH': return 'bg-info text-dark';
-            default: return 'bg-secondary text-white';
-        }
-    }
-
-    function getStatusClass(statusCode) {
-        if (statusCode >= 200 && statusCode < 300) return 'bg-success';
-        if (statusCode >= 300 && statusCode < 400) return 'bg-info';
-        if (statusCode >= 400 && statusCode < 500) return 'bg-warning';
-        if (statusCode >= 500) return 'bg-danger';
-        return 'bg-secondary';
-    }
-
-    function formatJson(content) {
-        try {
-            if (content.startsWith('{') || content.startsWith('[')) {
-                return JSON.stringify(JSON.parse(content), null, 2);
-            }
-        } catch {}
-        return content;
-    }
-
-    // Log rendering functions
-    function createDetailsSection(log) {
-        if (!log) return '<div>No details available</div>';
-
-        return `
-            <div class="card card-body m-2">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Request</h6>
-                        <div class="mb-3">
-                            <strong>Headers</strong>
-                            <div class="log-details">
-                                <pre>${log.headers ? Object.entries(log.headers).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
-                            </div>
-                        </div>
-                        ${log.body ? `
-                        <div class="mb-3">
-                            <strong>Body</strong>
-                            <div class="log-details">
-                                <pre class="json-content">${formatJson(log.body)}</pre>
-                            </div>
-                        </div>
-                        ` : ''}
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Response</h6>
-                        <div class="mb-3">
-                            <strong>Headers</strong>
-                            <div class="log-details">
-                                <pre>${log.responseHeaders ? Object.entries(log.responseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
-                            </div>
-                        </div>
-                        ${log.responseBody ? `
-                        <div class="mb-3">
-                            <strong>Body</strong>
-                            <div class="log-details">
-                                <pre class="json-content">${formatJson(log.responseBody)}</pre>
-                            </div>
-                        </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>`;
-    }
-
-    function addLogToTable(log) {
-        try {
-            console.log('Received log:', log); // Debug logging
-
-            if (!log) {
-                console.error('Received undefined log');
-                return;
-            }
-
-            // Create main log row
-            const logRow = document.createElement('tr');
-            logRow.id = `log-${log.id || 'unknown'}`;
-            logRow.classList.add('new-log');
-
-            // Format the timestamp safely
-            let timestamp;
-            try {
-                timestamp = log.timestamp ? new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23) : 'Invalid Date';
-            } catch (e) {
-                timestamp = 'Invalid Date';
-                console.error('Error parsing timestamp:', e);
-            }
-
-            logRow.innerHTML = `
-                <td class="timestamp">${timestamp}</td>
-                <td><code>${log.id || 'unknown'}</code></td>
-                <td>
-                    <span class="badge method-badge ${getMethodClass(log.method)}">${log.method || 'UNKNOWN'}</span>
-                </td>
-                <td>${log.path || ''}${log.queryString || ''}</td>
-                <td>
-                    <span class="badge ${getStatusClass(log.responseStatusCode || 0)}">${log.responseStatusCode || 'N/A'}</span>
-                </td>
-                <td>${log.duration ? log.duration.totalMilliseconds.toFixed(2) : '0.00'}ms</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" type="button" 
-                            data-bs-toggle="collapse" data-bs-target="#details-${log.id || 'unknown'}">
-                        View Details
-                    </button>
-                </td>
-            `;
-
-            const detailsRow = document.createElement('tr');
-            detailsRow.innerHTML = `
-                <td colspan="7" class="p-0">
-                    <div class="collapse" id="details-${log.id || 'unknown'}">
-                        ${createDetailsSection(log)}
-                    </div>
-                </td>
-            `;
-
-            if (logTableBody.firstChild) {
-                logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
-                logTableBody.insertBefore(logRow, logTableBody.firstChild);
-            } else {
-                logTableBody.appendChild(logRow);
-                logTableBody.appendChild(detailsRow);
-            }
-
-            logCount++;
-            logCountElement.textContent = logCount;
-            setTimeout(() => logRow.classList.remove('new-log'), 2000);
-        } catch (error) {
-            console.error('Error adding log to table:', error, 'Log data:', log);
-        }
-    }
-
-        // Create details row
-        const detailsRow = document.createElement('tr');
-        detailsRow.innerHTML = `
-            <td colspan="7" class="p-0">
-                <div class="collapse" id="details-${log.id}">
-                    ${createDetailsSection(log)}
-                </div>
-            </td>
-        `;
-
-        // Add rows to table
-        if (logTableBody.firstChild) {
-            logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
-            logTableBody.insertBefore(logRow, logTableBody.firstChild);
-        } else {
-            logTableBody.appendChild(logRow);
-            logTableBody.appendChild(detailsRow);
-        }
-
-        // Update count and remove highlight after animation
-        logCount++;
-        logCountElement.textContent = logCount;
-        setTimeout(() => logRow.classList.remove('new-log'), 2000);
-    }
-
-    // Server-Sent Events setup
-    function connectSSE() {
-        console.log('Connecting to event stream...');
-        const eventSource = new EventSource('?handler=Stream');
-
-        eventSource.onopen = () => {
-            console.log('Connection established');
-            statusElement.textContent = 'Connected';
-            statusElement.className = 'connection-status connected';
+        const consoleLog = console.log;
+        console.log = function(...args) {
+            consoleLog.apply(console, args);
+            const log = document.createElement('div');
+            log.className = 'client-log';
+            log.textContent = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg) : arg
+            ).join(' ');
+            document.getElementById('clientLogs').appendChild(log);
         };
 
-        eventSource.onmessage = (event) => {
+        // Style helper functions
+        function getMethodClass(method) {
+            if (!method) return 'bg-secondary text-white';
+
+            switch (method.toUpperCase()) {
+                case 'GET': return 'bg-success text-white';
+                case 'POST': return 'bg-primary text-white';
+                case 'PUT': return 'bg-warning text-dark';
+                case 'DELETE': return 'bg-danger text-white';
+                case 'PATCH': return 'bg-info text-dark';
+                default: return 'bg-secondary text-white';
+            }
+        }
+
+        function getStatusClass(statusCode) {
+            if (statusCode >= 200 && statusCode < 300) return 'bg-success';
+            if (statusCode >= 300 && statusCode < 400) return 'bg-info';
+            if (statusCode >= 400 && statusCode < 500) return 'bg-warning';
+            if (statusCode >= 500) return 'bg-danger';
+            return 'bg-secondary';
+        }
+
+        function formatJson(content) {
             try {
-                console.log('Raw event data:', event.data); // Debug logging
-                const log = JSON.parse(event.data);
+                if (content.startsWith('{') || content.startsWith('[')) {
+                    return JSON.stringify(JSON.parse(content), null, 2);
+                }
+            } catch {}
+            return content;
+        }
+
+        // Log rendering functions
+        function createDetailsSection(log) {
+            if (!log) return '<div>No details available</div>';
+
+            return `
+                <div class="card card-body m-2">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Request</h6>
+                            <div class="mb-3">
+                                <strong>Headers</strong>
+                                <div class="log-details">
+                                    <pre>${log.headers ? Object.entries(log.headers).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
+                                </div>
+                            </div>
+                            ${log.body ? `
+                            <div class="mb-3">
+                                <strong>Body</strong>
+                                <div class="log-details">
+                                    <pre class="json-content">${formatJson(log.body)}</pre>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Response</h6>
+                            <div class="mb-3">
+                                <strong>Headers</strong>
+                                <div class="log-details">
+                                    <pre>${log.responseHeaders ? Object.entries(log.responseHeaders).map(([k,v]) => `${k}: ${v}`).join('\n') : 'No headers'}</pre>
+                                </div>
+                            </div>
+                            ${log.responseBody ? `
+                            <div class="mb-3">
+                                <strong>Body</strong>
+                                <div class="log-details">
+                                    <pre class="json-content">${formatJson(log.responseBody)}</pre>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function addLogToTable(log) {
+            try {
+                console.log('Received log:', log); // Debug logging
+
                 if (!log) {
-                    console.error('Parsed log is undefined');
+                    console.error('Received undefined log');
                     return;
                 }
-                addLogToTable(log);
-            } catch (error) {
-                console.error('Error processing event:', error, 'Event data:', event.data);
-            }
-        };
 
-        eventSource.onerror = () => {
-            console.log('Connection lost, attempting to reconnect...');
-            statusElement.textContent = 'Disconnected - Reconnecting...';
-            statusElement.className = 'connection-status disconnected';
-            eventSource.close();
-            setTimeout(connectSSE, 3000);
-        };
+                // Create main log row
+                const logRow = document.createElement('tr');
+                logRow.id = `log-${log.id || 'unknown'}`;
+                logRow.classList.add('new-log');
 
-        return eventSource;
-    }
-
-    // Clear logs handler
-    clearForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        try {
-            const response = await fetch('?handler=Clear', {
-                method: 'POST',
-                headers: {
-                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                // Format the timestamp safely
+                let timestamp;
+                try {
+                    timestamp = log.timestamp ? new Date(log.timestamp).toISOString().replace('T', ' ').substr(0, 23) : 'Invalid Date';
+                } catch (e) {
+                    timestamp = 'Invalid Date';
+                    console.error('Error parsing timestamp:', e);
                 }
-            });
-            if (response.ok) {
-                logTableBody.innerHTML = '';
-                logCount = 0;
-                logCountElement.textContent = '0';
-            }
-        } catch (error) {
-            console.error('Error clearing logs:', error);
-        }
-    });
 
-    // Start SSE connection as soon as the page loads
-    connectSSE();
-</script>
+                logRow.innerHTML = `
+                    <td class="timestamp">${timestamp}</td>
+                    <td><code>${log.id || 'unknown'}</code></td>
+                    <td>
+                        <span class="badge method-badge ${getMethodClass(log.method)}">${log.method || 'UNKNOWN'}</span>
+                    </td>
+                    <td>${log.path || ''}${log.queryString || ''}</td>
+                    <td>
+                        <span class="badge ${getStatusClass(log.responseStatusCode || 0)}">${log.responseStatusCode || 'N/A'}</span>
+                    </td>
+                    <td>${log.duration ? log.duration.totalMilliseconds.toFixed(2) : '0.00'}ms</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#details-${log.id || 'unknown'}">
+                            View Details
+                        </button>
+                    </td>
+                `;
+
+                const detailsRow = document.createElement('tr');
+                detailsRow.innerHTML = `
+                    <td colspan="7" class="p-0">
+                        <div class="collapse" id="details-${log.id || 'unknown'}">
+                            ${createDetailsSection(log)}
+                        </div>
+                    </td>
+                `;
+
+                if (logTableBody.firstChild) {
+                    logTableBody.insertBefore(detailsRow, logTableBody.firstChild);
+                    logTableBody.insertBefore(logRow, logTableBody.firstChild);
+                } else {
+                    logTableBody.appendChild(logRow);
+                    logTableBody.appendChild(detailsRow);
+                }
+
+                logCount++;
+                logCountElement.textContent = logCount;
+                setTimeout(() => logRow.classList.remove('new-log'), 2000);
+            } catch (error) {
+                console.error('Error adding log to table:', error, 'Log data:', log);
+            }
+        }
+
+        // Server-Sent Events setup
+        function connectSSE() {
+            console.log('Connecting to event stream...');
+            const eventSource = new EventSource('?handler=Stream');
+
+            eventSource.onopen = () => {
+                console.log('Connection established');
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'connection-status connected';
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    console.log('Raw event data:', event.data); // Debug logging
+                    const log = JSON.parse(event.data);
+                    if (!log) {
+                        console.error('Parsed log is undefined');
+                        return;
+                    }
+                    addLogToTable(log);
+                } catch (error) {
+                    console.error('Error processing event:', error, 'Event data:', event.data);
+                }
+            };
+
+            eventSource.onerror = () => {
+                console.log('Connection lost, attempting to reconnect...');
+                statusElement.textContent = 'Disconnected - Reconnecting...';
+                statusElement.className = 'connection-status disconnected';
+                eventSource.close();
+                setTimeout(connectSSE, 3000);
+            };
+
+            return eventSource;
+        }
+
+        // Clear logs handler
+        clearForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch('?handler=Clear', {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                    }
+                });
+                if (response.ok) {
+                    logTableBody.innerHTML = '';
+                    logCount = 0;
+                    logCountElement.textContent = '0';
+                }
+            } catch (error) {
+                console.error('Error clearing logs:', error);
+            }
+        });
+
+        // Start SSE connection as soon as the page loads
+        connectSSE();
+    </script>
 </body>
 </html>
 
