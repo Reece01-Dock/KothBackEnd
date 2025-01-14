@@ -133,18 +133,56 @@ namespace KothBackend.Controllers
         }
 
         [HttpPost("preset/{playerUID}")]
-        public async Task<IActionResult> UpdatePreset(string playerUID, [FromBody] PlayerPreset preset)
+        public async Task<IActionResult> UpdatePreset(string playerUID)
         {
             ValidateApiKey();
 
+            // Read the body content, whether it is JSON or x-www-form-urlencoded
+            string rawBody;
+            using (var reader = new StreamReader(Request.Body))
+            {
+                rawBody = await reader.ReadToEndAsync();
+            }
+
+            // Parse the body content
+            PlayerPreset preset;
+            try
+            {
+                // If Content-Type is x-www-form-urlencoded, extract the "content" key
+                if (Request.ContentType != null && Request.ContentType.Contains("application/x-www-form-urlencoded"))
+                {
+                    var parsedData = rawBody.Split('=', 2);
+                    if (parsedData.Length < 2 || parsedData[0] != "content")
+                    {
+                        return BadRequest(new { error = true, errorReason = "Invalid form-encoded payload" });
+                    }
+
+                    rawBody = Uri.UnescapeDataString(parsedData[1]); // Decode the JSON part
+                }
+
+                // Deserialize the JSON into a PlayerPreset object
+                preset = JsonSerializer.Deserialize<PlayerPreset>(rawBody);
+                if (preset == null)
+                {
+                    throw new JsonException("Deserialized object is null");
+                }
+            }
+            catch (JsonException ex)
+            {
+                return BadRequest(new { error = true, errorReason = $"Invalid JSON format: {ex.Message}" });
+            }
+
+            // Fetch the player's profile
             var profile = await _mongoService.GetProfile(playerUID);
             if (profile == null)
             {
-                return NotFound("Player profile not found");
+                return NotFound(new { error = true, errorReason = "Player profile not found" });
             }
 
+            // Update the player's preset and save it
             profile.m_playerPresets = new List<PlayerPreset> { preset };
             await _mongoService.UpdateProfile(profile);
+
             return Ok(new { status = "success", message = "Preset updated" });
         }
 
@@ -190,7 +228,7 @@ namespace KothBackend.Controllers
                 {
                     name = bonusCode.name,
                     code = bonusCode.code,
-                    playerUID = bonusCode.playerUID,
+                    playerUID = bohemiaUID,
                     multiplier = bonusCode.multiplier,
                     dateEnd = bonusCode.dateEnd,
                     error = false,
