@@ -197,7 +197,7 @@ namespace KothBackend.Controllers
             return Ok(bonus);
         }
 
-        [HttpPost("bonus")]
+        [HttpPost("bonusCode")]
         public async Task<ActionResult<BonusCode>> UseBonus([FromBody] BonusCodeRequest request)
         {
             try
