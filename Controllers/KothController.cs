@@ -159,9 +159,54 @@ namespace KothBackend.Controllers
         [HttpGet("bonus")]
         public async Task<ActionResult<BonusCodeResponse>> GetBonus([FromQuery] string bohemiaUID)
         {
+            // Validate API key
             ValidateApiKey();
-            var response = await _mongoService.GetBonusCode(bohemiaUID);
-            return Ok(response);
+
+            // Ensure the bohemiaUID parameter is provided
+            if (string.IsNullOrWhiteSpace(bohemiaUID))
+                return BadRequest(new BonusCodeResponse
+                {
+                    error = true,
+                    errorReason = "bohemiaUID is required"
+                });
+
+            try
+            {
+                // Fetch the bonus code for the player
+                var bonusCode = await _mongoService.GetBonusCode(bohemiaUID);
+
+                if (bonusCode == null)
+                {
+                    // No valid bonus code available
+                    return Ok(new BonusCodeResponse
+                    {
+                        error = true,
+                        errorReason = "No bonus code found"
+                    });
+                }
+
+                // Return the bonus code details
+                return Ok(new BonusCodeResponse
+                {
+                    name = bonusCode.name,
+                    code = bonusCode.code,
+                    playerUID = bonusCode.playerUID,
+                    multiplier = bonusCode.multiplier,
+                    dateEnd = bonusCode.dateEnd,
+                    error = false,
+                    errorReason = string.Empty
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log the exception and return an error response
+                Console.WriteLine($"Error fetching bonus code for UID {bohemiaUID}: {ex.Message}");
+                return StatusCode(500, new BonusCodeResponse
+                {
+                    error = true,
+                    errorReason = "An error occurred while fetching the bonus code"
+                });
+            }
         }
 
         [HttpPost("bonusCode")]
